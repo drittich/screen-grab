@@ -5,6 +5,7 @@ namespace ScreenGrab
 	public partial class Form1 : Form
 	{
 		private Button copyButton;
+		private Button saveButton;
 
 		public Form1() : base()
 		{
@@ -20,6 +21,16 @@ namespace ScreenGrab
 			copyButton.Click += CopyButton_Click;
 			this.Controls.Add(copyButton);
 
+			// Initialize the save button without setting Location; it will be handled dynamically.
+			saveButton = new Button
+			{
+				Text = "Save",
+				Visible = false,
+				Size = new Size(120, 40)
+			};
+			saveButton.Click += SaveButton_Click;
+			this.Controls.Add(saveButton);
+
 			// keep it visible while over the button, hide it when you leave it
 			copyButton.MouseLeave += (s, e) =>
 			{
@@ -29,6 +40,13 @@ namespace ScreenGrab
 					copyButton.Visible = false;
 			};
 
+			// Add a similar MouseLeave event to the save button
+			saveButton.MouseLeave += (s, e) =>
+			{
+				var clientPos = this.PointToClient(Cursor.Position);
+				if (!this.ClientRectangle.Contains(clientPos))
+					saveButton.Visible = false;
+			};
 
 			this.Opacity = 0; // Make the form fully transparent
 			this.ShowInTaskbar = false; // Hide the form from the taskbar
@@ -228,8 +246,8 @@ namespace ScreenGrab
 
 		protected override void OnMouseDown(MouseEventArgs e)
 		{
-			// Ensure the event is not handled if the click is on the copyButton
-			if (copyButton.Bounds.Contains(e.Location))
+			// Ensure the event is not handled if the click is on the copyButton or saveButton
+			if (copyButton.Bounds.Contains(e.Location) || saveButton.Bounds.Contains(e.Location))
 			{
 				return; // Allow the event to propagate to the button
 			}
@@ -246,11 +264,18 @@ namespace ScreenGrab
 		{
 			if (capturedImage != null && !dragStartPoint.HasValue)
 			{
-				// Show the copy button when hovering over the image
-				copyButton.Visible = true;
-				copyButton.BringToFront();
+				// Calculate button positions: center both buttons as a group
+				int gap = 10;
+				int groupWidth = copyButton.Width + saveButton.Width + gap;
+				int leftStart = (this.ClientSize.Width - groupWidth) / 2;
 
-				copyButton.Location = new Point((this.ClientSize.Width - copyButton.Width) / 2, 10); // Horizontally centered at the top
+				copyButton.Visible = true;
+				saveButton.Visible = true;
+				copyButton.BringToFront();
+				saveButton.BringToFront();
+
+				copyButton.Location = new Point(leftStart, 10);
+				saveButton.Location = new Point(leftStart + copyButton.Width + gap, 10);
 			}
 
 			if (e.Button == MouseButtons.Left && dragStartPoint.HasValue)
@@ -262,7 +287,9 @@ namespace ScreenGrab
 					Math.Abs(dragStartPoint.Value.X - currentPoint.X),
 					Math.Abs(dragStartPoint.Value.Y - currentPoint.Y)
 				);
-				copyButton.Visible = false; // Hide the button during drag
+				// Hide both buttons during drag
+				copyButton.Visible = false;
+				saveButton.Visible = false;
 				Invalidate();
 			}
 		}
@@ -270,11 +297,12 @@ namespace ScreenGrab
 		protected override void OnMouseLeave(EventArgs e)
 		{
 			base.OnMouseLeave(e);
-			// convert screen to client so we can test against copyButton.Bounds
+			// Convert screen to client so we can test against both buttons
 			var clientPos = this.PointToClient(Cursor.Position);
-			if (!copyButton.Bounds.Contains(clientPos))
+			if (!copyButton.Bounds.Contains(clientPos) && !saveButton.Bounds.Contains(clientPos))
 			{
 				copyButton.Visible = false;
+				saveButton.Visible = false;
 			}
 		}
 
@@ -289,7 +317,9 @@ namespace ScreenGrab
 			}
 			else
 			{
-				copyButton.Visible = false; // Hide the button after mouse up
+				// Hide both buttons after mouse up
+				copyButton.Visible = false;
+				saveButton.Visible = false;
 			}
 		}
 		private void CopyButton_Click(object? sender, EventArgs e)
@@ -298,18 +328,31 @@ namespace ScreenGrab
 			{
 				Clipboard.SetImage(capturedImage);
 
-				// hide the form immediately so it's out of the way for your next grab
+				// Hide the form immediately so it's out of the way for your next grab
 				this.Hide();
-
-				//MessageBox.Show(
-				//	"Image copied to clipboard!\n\nReady for the next capture.",
-				//	"Success",
-				//	MessageBoxButtons.OK,
-				//	MessageBoxIcon.Information
-				//);
 			}
 		}
 
+		private void SaveButton_Click(object? sender, EventArgs e)
+		{
+			try
+			{
+				string downloadsPath = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile) + @"\Downloads";
+				string timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss");
+				string filePath = Path.Combine(downloadsPath, $"Screenshot_{timestamp}.png");
+
+				using (Bitmap bitmap = new Bitmap(this.ClientSize.Width, this.ClientSize.Height))
+				{
+					this.DrawToBitmap(bitmap, this.ClientRectangle);
+					bitmap.Save(filePath, System.Drawing.Imaging.ImageFormat.Png);
+				}
+				MessageBox.Show($"Image saved to {filePath}", "Save Successful", MessageBoxButtons.OK, MessageBoxIcon.Information);
+			}
+			catch (Exception ex)
+			{
+				MessageBox.Show($"Failed to save image: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+			}
+		}
 
 		protected override void OnResize(EventArgs e)
 		{
@@ -325,7 +368,6 @@ namespace ScreenGrab
 				this.Invalidate();
 			}
 		}
-
 
 		private void AddRedBorder(Rectangle selection)
 		{
@@ -352,17 +394,17 @@ namespace ScreenGrab
 			//{
 			//	// Try to register the hotkey with a different ID
 			//	bool isHotKeyRegistered = RegisterHotKey(this.Handle, 100, (uint)(MOD_CONTROL | MOD_ALT), (uint)Keys.F12);
-
+			//
 			//	// If that fails, try another key combination
 			//	if (!isHotKeyRegistered)
 			//	{
 			//		int error = Marshal.GetLastWin32Error();
 			//		MessageBox.Show($"Failed to register Ctrl+Alt+F12. Error code: {error}", "Error",
 			//			MessageBoxButtons.OK, MessageBoxIcon.Warning);
-
+			//
 			//		// Try a different key combination
 			//		isHotKeyRegistered = RegisterHotKey(this.Handle, 101, (uint)(MOD_CONTROL | MOD_ALT), (uint)Keys.PrintScreen);
-
+			//
 			//		if (isHotKeyRegistered)
 			//		{
 			//			//MessageBox.Show("Hotkey registered: Ctrl+Alt+PrintScreen", "Info",
