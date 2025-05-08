@@ -337,22 +337,31 @@ namespace ScreenGrab
 		{
 			try
 			{
+				if (capturedImage == null)
+				{
+					MessageBox.Show("No image captured.", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+					return;
+				}
+
 				string downloadsPath = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile) + @"\Downloads";
 				string timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss");
 				string filePath = Path.Combine(downloadsPath, $"Screenshot_{timestamp}.png");
 
-				using (Bitmap bitmap = new Bitmap(this.ClientSize.Width, this.ClientSize.Height))
+				// Save a clone of the captured image to exclude form controls
+				using (Bitmap bitmapToSave = new Bitmap(capturedImage))
 				{
-					this.DrawToBitmap(bitmap, this.ClientRectangle);
-					bitmap.Save(filePath, System.Drawing.Imaging.ImageFormat.Png);
+					bitmapToSave.Save(filePath, System.Drawing.Imaging.ImageFormat.Png);
 				}
-				MessageBox.Show($"Image saved to {filePath}", "Save Successful", MessageBoxButtons.OK, MessageBoxIcon.Information);
+				MessageBox.Show($"Image saved to {filePath}", "Save Successful",
+					MessageBoxButtons.OK, MessageBoxIcon.Information);
 			}
 			catch (Exception ex)
 			{
-				MessageBox.Show($"Failed to save image: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+				MessageBox.Show($"Failed to save image: {ex.Message}", "Error",
+					MessageBoxButtons.OK, MessageBoxIcon.Error);
 			}
 		}
+
 
 		protected override void OnResize(EventArgs e)
 		{
