@@ -4,13 +4,39 @@ namespace ScreenGrab
 {
 	public partial class Form1 : Form
 	{
+		private Button copyButton;
+
 		public Form1() : base()
 		{
 			this.DoubleBuffered = true; // Enable double buffering for the form
+
+			// Initialize the copy button
+			copyButton = new Button
+			{
+				Text = "Copy",
+				Visible = false,
+				Size = new Size(120, 40)
+			};
+			copyButton.Click += CopyButton_Click;
+			this.Controls.Add(copyButton);
+
+			// keep it visible while over the button, hide it when you leave it
+			copyButton.MouseLeave += (s, e) =>
+			{
+				// only hide if the mouse is really off the form too
+				var clientPos = this.PointToClient(Cursor.Position);
+				if (!this.ClientRectangle.Contains(clientPos))
+					copyButton.Visible = false;
+			};
+
+
 			this.Opacity = 0; // Make the form fully transparent
 			this.ShowInTaskbar = false; // Hide the form from the taskbar
 			this.FormBorderStyle = FormBorderStyle.None; // Remove the title bar and buttons
-			this.Load += (s, e) => this.Hide(); // Ensure the form is hidden immediately after loading
+			this.Load += (s, e) =>
+			{
+				this.Hide(); // Ensure the form is hidden immediately after loading
+			};
 			InitializeComponent();
 			// Closing the constructor properly
 		}
@@ -186,6 +212,12 @@ namespace ScreenGrab
 
 		protected override void OnMouseDown(MouseEventArgs e)
 		{
+			// Ensure the event is not handled if the click is on the copyButton
+			if (copyButton.Bounds.Contains(e.Location))
+			{
+				return; // Allow the event to propagate to the button
+			}
+
 			if (e.Button == MouseButtons.Left)
 			{
 				dragStartPoint = e.Location;
@@ -196,6 +228,15 @@ namespace ScreenGrab
 
 		protected override void OnMouseMove(MouseEventArgs e)
 		{
+			if (capturedImage != null && !dragStartPoint.HasValue)
+			{
+				// Show the copy button when hovering over the image
+				copyButton.Visible = true;
+				copyButton.BringToFront();
+
+				copyButton.Location = new Point((this.ClientSize.Width - copyButton.Width) / 2, 10); // Horizontally centered at the top
+			}
+
 			if (e.Button == MouseButtons.Left && dragStartPoint.HasValue)
 			{
 				Point currentPoint = e.Location;
@@ -205,7 +246,19 @@ namespace ScreenGrab
 					Math.Abs(dragStartPoint.Value.X - currentPoint.X),
 					Math.Abs(dragStartPoint.Value.Y - currentPoint.Y)
 				);
+				copyButton.Visible = false; // Hide the button during drag
 				Invalidate();
+			}
+		}
+
+		protected override void OnMouseLeave(EventArgs e)
+		{
+			base.OnMouseLeave(e);
+			// convert screen to client so we can test against copyButton.Bounds
+			var clientPos = this.PointToClient(Cursor.Position);
+			if (!copyButton.Bounds.Contains(clientPos))
+			{
+				copyButton.Visible = false;
 			}
 		}
 
@@ -217,6 +270,18 @@ namespace ScreenGrab
 				dragStartPoint = null;
 				dragRectangle = null;
 				Invalidate();
+			}
+			else
+			{
+				copyButton.Visible = false; // Hide the button after mouse up
+			}
+		}
+		private void CopyButton_Click(object? sender, EventArgs e)
+		{
+			if (capturedImage != null)
+			{
+				Clipboard.SetImage(capturedImage);
+				MessageBox.Show("Image copied to clipboard!", "Success", MessageBoxButtons.OK, MessageBoxIcon.Information);
 			}
 		}
 
