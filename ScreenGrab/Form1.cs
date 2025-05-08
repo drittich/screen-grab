@@ -2,22 +2,23 @@ using System.Runtime.InteropServices;
 
 namespace ScreenGrab
 {
-public partial class Form1 : Form
-{
-public Form1() : base()
-{
-    this.DoubleBuffered = true; // Enable double buffering for the form
-this.Opacity = 0; // Make the form fully transparent
-this.ShowInTaskbar = false; // Hide the form from the taskbar
-this.FormBorderStyle = FormBorderStyle.None; // Remove the title bar and buttons
-    InitializeComponent();
-// Closing the constructor properly
-}
+	public partial class Form1 : Form
+	{
+		public Form1() : base()
+		{
+			this.DoubleBuffered = true; // Enable double buffering for the form
+			this.Opacity = 0; // Make the form fully transparent
+			this.ShowInTaskbar = false; // Hide the form from the taskbar
+			this.FormBorderStyle = FormBorderStyle.None; // Remove the title bar and buttons
+			this.Load += (s, e) => this.Hide(); // Ensure the form is hidden immediately after loading
+			InitializeComponent();
+			// Closing the constructor properly
+		}
 
 		// Define modifier keys
-private const int WM_HOTKEY = 0x0312; // Define WM_HOTKEY constant
-private const uint MOD_CONTROL = 0x0002; // Control key
-private const uint MOD_ALT = 0x0001;     // Alt key
+		private const int WM_HOTKEY = 0x0312; // Define WM_HOTKEY constant
+		private const uint MOD_CONTROL = 0x0002; // Control key
+		private const uint MOD_ALT = 0x0001;     // Alt key
 
 		[DllImport("user32.dll")]
 		private static extern bool RegisterHotKey(IntPtr hWnd, int id, uint fsModifiers, uint vk);
@@ -28,10 +29,10 @@ private const uint MOD_ALT = 0x0001;     // Alt key
 		[DllImport("user32.dll")]
 		private static extern bool SetForegroundWindow(IntPtr hWnd);
 
-// Re-adding missing fields
-private Bitmap? capturedImage;
-private SelectionForm? selectionForm;
-private NotifyIcon? trayIcon;
+		// Re-adding missing fields
+		private Bitmap? capturedImage;
+		private SelectionForm? selectionForm;
+		private NotifyIcon? trayIcon;
 
 		// Method to store the tray icon reference
 		public void SetTrayIcon(NotifyIcon icon)
@@ -59,7 +60,7 @@ private NotifyIcon? trayIcon;
 			try
 			{
 				// Ensure form is hidden before starting selection
-				this.Hide();
+				this.Visible = false; // Ensure the form remains hidden
 
 				// Take screenshot of entire screen
 				Rectangle screenBounds = Screen.PrimaryScreen.Bounds;
@@ -152,90 +153,72 @@ private NotifyIcon? trayIcon;
 			// Ensure UI is updated
 			Application.DoEvents();
 
-this.Refresh();
-
-			//DebugFormVisibility();
+			this.Refresh();
 		}
 
-		// Helper method for debugging visibility issues
-		private void DebugFormVisibility()
+		private Point? dragStartPoint = null;
+		private Rectangle? dragRectangle = null;
+
+		protected override void OnPaint(PaintEventArgs e)
 		{
-			string message = $"Form properties:\n" +
-				$"Visible: {this.Visible}\n" +
-				$"Opacity: {this.Opacity}\n" +
-				$"WindowState: {this.WindowState}\n" +
-				$"FormBorderStyle: {this.FormBorderStyle}\n" +
-				$"Location: {this.Location}\n" +
-				$"Size: {this.Size}\n" +
-				$"ShowInTaskbar: {this.ShowInTaskbar}\n" +
-				$"TopMost: {this.TopMost}";
+			base.OnPaint(e);
+			if (capturedImage != null)
+			{
+				// Use double buffering to reduce flickering
+				BufferedGraphicsContext currentContext = BufferedGraphicsManager.Current;
+				using BufferedGraphics bufferedGraphics = currentContext.Allocate(e.Graphics, this.DisplayRectangle);
 
-			MessageBox.Show(message, "Form Visibility Debug");
+				// Draw the image at its original size
+				bufferedGraphics.Graphics.DrawImage(capturedImage, AutoScrollPosition.X, AutoScrollPosition.Y,
+				capturedImage.Width, capturedImage.Height);
+
+				// Draw the rectangle if it exists
+				if (dragRectangle.HasValue)
+				{
+					using Pen pen = new Pen(Color.Red, 2);
+					bufferedGraphics.Graphics.DrawRectangle(pen, dragRectangle.Value);
+				}
+
+				// Render the buffered graphics
+				bufferedGraphics.Render();
+			}
 		}
 
-private Point? dragStartPoint = null;
-private Rectangle? dragRectangle = null;
+		protected override void OnMouseDown(MouseEventArgs e)
+		{
+			if (e.Button == MouseButtons.Left)
+			{
+				dragStartPoint = e.Location;
+				dragRectangle = null;
+				Invalidate();
+			}
+		}
 
-protected override void OnPaint(PaintEventArgs e)
-{
-base.OnPaint(e);
-if (capturedImage != null)
-{
-// Use double buffering to reduce flickering
-BufferedGraphicsContext currentContext = BufferedGraphicsManager.Current;
-using BufferedGraphics bufferedGraphics = currentContext.Allocate(e.Graphics, this.DisplayRectangle);
+		protected override void OnMouseMove(MouseEventArgs e)
+		{
+			if (e.Button == MouseButtons.Left && dragStartPoint.HasValue)
+			{
+				Point currentPoint = e.Location;
+				dragRectangle = new Rectangle(
+					Math.Min(dragStartPoint.Value.X, currentPoint.X),
+					Math.Min(dragStartPoint.Value.Y, currentPoint.Y),
+					Math.Abs(dragStartPoint.Value.X - currentPoint.X),
+					Math.Abs(dragStartPoint.Value.Y - currentPoint.Y)
+				);
+				Invalidate();
+			}
+		}
 
-// Draw the image at its original size
-bufferedGraphics.Graphics.DrawImage(capturedImage, AutoScrollPosition.X, AutoScrollPosition.Y,
-capturedImage.Width, capturedImage.Height);
-
-// Draw the rectangle if it exists
-if (dragRectangle.HasValue)
-{
-using Pen pen = new Pen(Color.Red, 2);
-bufferedGraphics.Graphics.DrawRectangle(pen, dragRectangle.Value);
-}
-
-// Render the buffered graphics
-bufferedGraphics.Render();
-}
-}
-
-protected override void OnMouseDown(MouseEventArgs e)
-{
-if (e.Button == MouseButtons.Left)
-{
-dragStartPoint = e.Location;
-dragRectangle = null;
-Invalidate();
-}
-}
-
-protected override void OnMouseMove(MouseEventArgs e)
-{
-if (e.Button == MouseButtons.Left && dragStartPoint.HasValue)
-{
-Point currentPoint = e.Location;
-dragRectangle = new Rectangle(
-    Math.Min(dragStartPoint.Value.X, currentPoint.X),
-    Math.Min(dragStartPoint.Value.Y, currentPoint.Y),
-    Math.Abs(dragStartPoint.Value.X - currentPoint.X),
-    Math.Abs(dragStartPoint.Value.Y - currentPoint.Y)
-);
-Invalidate();
-}
-}
-
-protected override void OnMouseUp(MouseEventArgs e)
-{
-if (e.Button == MouseButtons.Left && dragRectangle.HasValue)
-{
-AddRedBorder(dragRectangle.Value);
-dragStartPoint = null;
-dragRectangle = null;
-Invalidate();
-}
-}
+		protected override void OnMouseUp(MouseEventArgs e)
+		{
+			if (e.Button == MouseButtons.Left && dragRectangle.HasValue)
+			{
+				AddRedBorder(dragRectangle.Value);
+				dragStartPoint = null;
+				dragRectangle = null;
+				Invalidate();
+			}
+		}
 
 		protected override void OnResize(EventArgs e)
 		{
