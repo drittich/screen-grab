@@ -2,13 +2,22 @@ using System.Runtime.InteropServices;
 
 namespace ScreenGrab
 {
-	public partial class Form1 : Form
-	{
-		private const int WM_HOTKEY = 0x0312;
+public partial class Form1 : Form
+{
+public Form1() : base()
+{
+    this.DoubleBuffered = true; // Enable double buffering for the form
+this.Opacity = 0; // Make the form fully transparent
+this.ShowInTaskbar = false; // Hide the form from the taskbar
+this.FormBorderStyle = FormBorderStyle.None; // Remove the title bar and buttons
+    InitializeComponent();
+// Closing the constructor properly
+}
 
 		// Define modifier keys
-		private const uint MOD_CONTROL = 0x0002; // Control key
-		private const uint MOD_ALT = 0x0001;     // Alt key
+private const int WM_HOTKEY = 0x0312; // Define WM_HOTKEY constant
+private const uint MOD_CONTROL = 0x0002; // Control key
+private const uint MOD_ALT = 0x0001;     // Alt key
 
 		[DllImport("user32.dll")]
 		private static extern bool RegisterHotKey(IntPtr hWnd, int id, uint fsModifiers, uint vk);
@@ -19,28 +28,10 @@ namespace ScreenGrab
 		[DllImport("user32.dll")]
 		private static extern bool SetForegroundWindow(IntPtr hWnd);
 
-		private Bitmap? capturedImage;
-		private SelectionForm? selectionForm;
-		private NotifyIcon? trayIcon;
-
-		public Form1()
-		{
-			try
-			{
-				InitializeComponent();
-				// Make sure the form starts invisible
-				this.Visible = false;
-				this.ShowInTaskbar = false;
-
-				// Use WindowState minimized to prevent taskbar flashing
-				this.WindowState = FormWindowState.Minimized;
-
-			}
-			catch (Exception ex)
-			{
-				MessageBox.Show($"Error during initialization: {ex.Message}");
-			}
-		}
+// Re-adding missing fields
+private Bitmap? capturedImage;
+private SelectionForm? selectionForm;
+private NotifyIcon? trayIcon;
 
 		// Method to store the tray icon reference
 		public void SetTrayIcon(NotifyIcon icon)
@@ -161,7 +152,7 @@ namespace ScreenGrab
 			// Ensure UI is updated
 			Application.DoEvents();
 
-			Invalidate();
+this.Refresh();
 
 			//DebugFormVisibility();
 		}
@@ -190,16 +181,23 @@ protected override void OnPaint(PaintEventArgs e)
 base.OnPaint(e);
 if (capturedImage != null)
 {
+// Use double buffering to reduce flickering
+BufferedGraphicsContext currentContext = BufferedGraphicsManager.Current;
+using BufferedGraphics bufferedGraphics = currentContext.Allocate(e.Graphics, this.DisplayRectangle);
+
 // Draw the image at its original size
-e.Graphics.DrawImage(capturedImage, AutoScrollPosition.X, AutoScrollPosition.Y,
+bufferedGraphics.Graphics.DrawImage(capturedImage, AutoScrollPosition.X, AutoScrollPosition.Y,
 capturedImage.Width, capturedImage.Height);
 
 // Draw the rectangle if it exists
 if (dragRectangle.HasValue)
 {
 using Pen pen = new Pen(Color.Red, 2);
-e.Graphics.DrawRectangle(pen, dragRectangle.Value);
+bufferedGraphics.Graphics.DrawRectangle(pen, dragRectangle.Value);
 }
+
+// Render the buffered graphics
+bufferedGraphics.Render();
 }
 }
 
