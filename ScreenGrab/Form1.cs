@@ -38,7 +38,23 @@ namespace ScreenGrab
 				this.Hide(); // Ensure the form is hidden immediately after loading
 			};
 			InitializeComponent();
-			// Closing the constructor properly
+
+			this.HandleCreated += Form1_HandleCreated;
+			this.HandleDestroyed += Form1_HandleDestroyed;
+		}
+
+		private void Form1_HandleCreated(object? sender, EventArgs e)
+		{
+			// register both combos every time we get a handle
+			RegisterHotKey(this.Handle, 100, MOD_CONTROL | MOD_ALT, (uint)Keys.F12);
+			RegisterHotKey(this.Handle, 101, MOD_CONTROL | MOD_ALT, (uint)Keys.PrintScreen);
+		}
+
+		private void Form1_HandleDestroyed(object? sender, EventArgs e)
+		{
+			// clean up after ourselves
+			UnregisterHotKey(this.Handle, 100);
+			UnregisterHotKey(this.Handle, 101);
 		}
 
 		// Define modifier keys
@@ -281,9 +297,19 @@ namespace ScreenGrab
 			if (capturedImage != null)
 			{
 				Clipboard.SetImage(capturedImage);
-				MessageBox.Show("Image copied to clipboard!", "Success", MessageBoxButtons.OK, MessageBoxIcon.Information);
+
+				// hide the form immediately so it's out of the way for your next grab
+				this.Hide();
+
+				//MessageBox.Show(
+				//	"Image copied to clipboard!\n\nReady for the next capture.",
+				//	"Success",
+				//	MessageBoxButtons.OK,
+				//	MessageBoxIcon.Information
+				//);
 			}
 		}
+
 
 		protected override void OnResize(EventArgs e)
 		{
@@ -322,39 +348,39 @@ namespace ScreenGrab
 		private void Form1_Load(object sender, EventArgs e)
 		{
 			// Add a small delay to ensure the form handle is created
-			this.BeginInvoke(new Action(() =>
-			{
-				// Try to register the hotkey with a different ID
-				bool isHotKeyRegistered = RegisterHotKey(this.Handle, 100, (uint)(MOD_CONTROL | MOD_ALT), (uint)Keys.F12);
+			//this.BeginInvoke(new Action(() =>
+			//{
+			//	// Try to register the hotkey with a different ID
+			//	bool isHotKeyRegistered = RegisterHotKey(this.Handle, 100, (uint)(MOD_CONTROL | MOD_ALT), (uint)Keys.F12);
 
-				// If that fails, try another key combination
-				if (!isHotKeyRegistered)
-				{
-					int error = Marshal.GetLastWin32Error();
-					MessageBox.Show($"Failed to register Ctrl+Alt+F12. Error code: {error}", "Error",
-						MessageBoxButtons.OK, MessageBoxIcon.Warning);
+			//	// If that fails, try another key combination
+			//	if (!isHotKeyRegistered)
+			//	{
+			//		int error = Marshal.GetLastWin32Error();
+			//		MessageBox.Show($"Failed to register Ctrl+Alt+F12. Error code: {error}", "Error",
+			//			MessageBoxButtons.OK, MessageBoxIcon.Warning);
 
-					// Try a different key combination
-					isHotKeyRegistered = RegisterHotKey(this.Handle, 101, (uint)(MOD_CONTROL | MOD_ALT), (uint)Keys.PrintScreen);
+			//		// Try a different key combination
+			//		isHotKeyRegistered = RegisterHotKey(this.Handle, 101, (uint)(MOD_CONTROL | MOD_ALT), (uint)Keys.PrintScreen);
 
-					if (isHotKeyRegistered)
-					{
-						//MessageBox.Show("Hotkey registered: Ctrl+Alt+PrintScreen", "Info",
-						//	MessageBoxButtons.OK, MessageBoxIcon.Information);
-					}
-					else
-					{
-						error = Marshal.GetLastWin32Error();
-						MessageBox.Show($"Failed to register alternate hotkey. Error code: {error}", "Error",
-							MessageBoxButtons.OK, MessageBoxIcon.Error);
-					}
-				}
-				else
-				{
-					//MessageBox.Show("Hotkey registered: Ctrl+Alt+F12", "Info",
-					//	MessageBoxButtons.OK, MessageBoxIcon.Information);
-				}
-			}));
+			//		if (isHotKeyRegistered)
+			//		{
+			//			//MessageBox.Show("Hotkey registered: Ctrl+Alt+PrintScreen", "Info",
+			//			//	MessageBoxButtons.OK, MessageBoxIcon.Information);
+			//		}
+			//		else
+			//		{
+			//			error = Marshal.GetLastWin32Error();
+			//			MessageBox.Show($"Failed to register alternate hotkey. Error code: {error}", "Error",
+			//				MessageBoxButtons.OK, MessageBoxIcon.Error);
+			//		}
+			//	}
+			//	else
+			//	{
+			//		//MessageBox.Show("Hotkey registered: Ctrl+Alt+F12", "Info",
+			//		//	MessageBoxButtons.OK, MessageBoxIcon.Information);
+			//	}
+			//}));
 
 			// Add this line to enable auto-scrolling
 			this.AutoScroll = true;
