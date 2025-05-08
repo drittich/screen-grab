@@ -182,16 +182,62 @@ namespace ScreenGrab
 			MessageBox.Show(message, "Form Visibility Debug");
 		}
 
-		protected override void OnPaint(PaintEventArgs e)
-		{
-			base.OnPaint(e);
-			if (capturedImage != null)
-			{
-				// Draw the image at its original size
-				e.Graphics.DrawImage(capturedImage, AutoScrollPosition.X, AutoScrollPosition.Y,
-					capturedImage.Width, capturedImage.Height);
-			}
-		}
+private Point? dragStartPoint = null;
+private Rectangle? dragRectangle = null;
+
+protected override void OnPaint(PaintEventArgs e)
+{
+base.OnPaint(e);
+if (capturedImage != null)
+{
+// Draw the image at its original size
+e.Graphics.DrawImage(capturedImage, AutoScrollPosition.X, AutoScrollPosition.Y,
+capturedImage.Width, capturedImage.Height);
+
+// Draw the rectangle if it exists
+if (dragRectangle.HasValue)
+{
+using Pen pen = new Pen(Color.Red, 2);
+e.Graphics.DrawRectangle(pen, dragRectangle.Value);
+}
+}
+}
+
+protected override void OnMouseDown(MouseEventArgs e)
+{
+if (e.Button == MouseButtons.Left)
+{
+dragStartPoint = e.Location;
+dragRectangle = null;
+Invalidate();
+}
+}
+
+protected override void OnMouseMove(MouseEventArgs e)
+{
+if (e.Button == MouseButtons.Left && dragStartPoint.HasValue)
+{
+Point currentPoint = e.Location;
+dragRectangle = new Rectangle(
+    Math.Min(dragStartPoint.Value.X, currentPoint.X),
+    Math.Min(dragStartPoint.Value.Y, currentPoint.Y),
+    Math.Abs(dragStartPoint.Value.X - currentPoint.X),
+    Math.Abs(dragStartPoint.Value.Y - currentPoint.Y)
+);
+Invalidate();
+}
+}
+
+protected override void OnMouseUp(MouseEventArgs e)
+{
+if (e.Button == MouseButtons.Left && dragRectangle.HasValue)
+{
+AddRedBorder(dragRectangle.Value);
+dragStartPoint = null;
+dragRectangle = null;
+Invalidate();
+}
+}
 
 		protected override void OnResize(EventArgs e)
 		{
