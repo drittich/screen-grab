@@ -4,6 +4,7 @@ namespace ScreenGrab
 {
 	public partial class Form1 : Form
 	{
+		private Panel headerPanel;
 		private Button copyButton;
 		private Button saveButton;
 
@@ -12,46 +13,42 @@ namespace ScreenGrab
 			this.SetStyle(
 				ControlStyles.ResizeRedraw     // repaint on Resize
 			  | ControlStyles.AllPaintingInWmPaint // skip WM_ERASEBKGND, paint everything in one go
-			  | ControlStyles.UserPaint        // you’re handling all painting
+			  | ControlStyles.UserPaint        // youâ€™re handling all painting
 			, true);
 			this.DoubleBuffered = true; // Enable double buffering for the form
 
-			// Initialize the copy button
+			headerPanel = new Panel
+			{
+				Dock = DockStyle.Top,
+				Height = 60,
+				BackColor = SystemColors.ControlLight
+			};
+
 			copyButton = new Button
 			{
 				Text = "Copy",
-				Visible = false,
-				Size = new Size(120, 40)
+				Size = new Size(90, 40),
+				Location = new Point(10, 15)
 			};
 			copyButton.Click += CopyButton_Click;
-			this.Controls.Add(copyButton);
 
-			// Initialize the save button without setting Location; it will be handled dynamically.
 			saveButton = new Button
 			{
 				Text = "Save",
-				Visible = false,
-				Size = new Size(120, 40)
+				Size = new Size(90, 40),
+				Location = new Point(100, 15)
 			};
 			saveButton.Click += SaveButton_Click;
-			this.Controls.Add(saveButton);
+
+			headerPanel.Controls.Add(copyButton);
+			headerPanel.Controls.Add(saveButton);
+			this.Controls.Add(headerPanel);
+
+			// Initialize the save button without setting Location; it will be handled dynamically.
 
 			// keep it visible while over the button, hide it when you leave it
-			copyButton.MouseLeave += (s, e) =>
-			{
-				// only hide if the mouse is really off the form too
-				var clientPos = this.PointToClient(Cursor.Position);
-				if (!this.ClientRectangle.Contains(clientPos))
-					copyButton.Visible = false;
-			};
 
 			// Add a similar MouseLeave event to the save button
-			saveButton.MouseLeave += (s, e) =>
-			{
-				var clientPos = this.PointToClient(Cursor.Position);
-				if (!this.ClientRectangle.Contains(clientPos))
-					saveButton.Visible = false;
-			};
 
 			this.Opacity = 0; // Make the form fully transparent
 			this.ShowInTaskbar = false; // Hide the form from the taskbar
@@ -59,6 +56,13 @@ namespace ScreenGrab
 			this.Load += (s, e) =>
 			{
 				this.Hide(); // Ensure the form is hidden immediately after loading
+			};
+
+			// Ensure buttons are visible when mouse enters the header panel
+			headerPanel.MouseEnter += (s, e) =>
+			{
+				copyButton.Visible = true;
+				saveButton.Visible = true;
 			};
 			InitializeComponent();
 
@@ -336,17 +340,6 @@ namespace ScreenGrab
 			}
 		}
 
-		protected override void OnMouseLeave(EventArgs e)
-		{
-			base.OnMouseLeave(e);
-			// Convert screen to client so we can test against both buttons
-			var clientPos = this.PointToClient(Cursor.Position);
-			if (!copyButton.Bounds.Contains(clientPos) && !saveButton.Bounds.Contains(clientPos))
-			{
-				copyButton.Visible = false;
-				saveButton.Visible = false;
-			}
-		}
 
 		protected override void OnMouseUp(MouseEventArgs e)
 		{
@@ -364,6 +357,7 @@ namespace ScreenGrab
 				saveButton.Visible = false;
 			}
 		}
+
 
 		private void CopyButton_Click(object? sender, EventArgs e)
 		{
