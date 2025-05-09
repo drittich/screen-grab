@@ -302,9 +302,12 @@ namespace ScreenGrab
 				// Draw the rectangle if it exists
 				if (dragRectangle.HasValue)
 				{
+					Rectangle rect = dragRectangle.Value;
+					rect.Offset(0, headerPanel.Height);
 					using Pen pen = new Pen(Color.Red, 2);
-					DrawRoundedRectangle(bufferedGraphics.Graphics, pen, dragRectangle.Value, 10); // Rounded corners with radius 10
+					DrawRoundedRectangle(bufferedGraphics.Graphics, pen, rect, 10);
 				}
+
 
 				// Render the buffered graphics
 				bufferedGraphics.Render();
@@ -321,10 +324,11 @@ namespace ScreenGrab
 
 			if (e.Button == MouseButtons.Left)
 			{
-				dragStartPoint = e.Location;
+				dragStartPoint = new Point(e.X, e.Y - headerPanel.Height);
 				dragRectangle = null;
 				Invalidate();
 			}
+
 		}
 
 		protected override void OnMouseMove(MouseEventArgs e)
@@ -347,7 +351,7 @@ namespace ScreenGrab
 
 			if (e.Button == MouseButtons.Left && dragStartPoint.HasValue)
 			{
-				Point currentPoint = e.Location;
+				Point currentPoint = new Point(e.X, e.Y - headerPanel.Height);
 				dragRectangle = new Rectangle(
 					Math.Min(dragStartPoint.Value.X, currentPoint.X),
 					Math.Min(dragStartPoint.Value.Y, currentPoint.Y),
@@ -359,6 +363,7 @@ namespace ScreenGrab
 				saveButton.Visible = false;
 				Invalidate();
 			}
+
 		}
 
 
