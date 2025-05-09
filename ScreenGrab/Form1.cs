@@ -215,7 +215,7 @@ namespace ScreenGrab
 			AutoScrollMinSize = Size.Empty;
 
 			// Set exact dimensions to match the captured image
-			ClientSize = new Size(bitmap.Width, bitmap.Height);
+			ClientSize = new Size(bitmap.Width, bitmap.Height + headerPanel.Height);
 
 			// Reset form visual state
 			Opacity = 1.0;
@@ -270,7 +270,7 @@ namespace ScreenGrab
 				using BufferedGraphics bufferedGraphics = currentContext.Allocate(e.Graphics, DisplayRectangle);
 
 				// Draw the image at its original size
-				bufferedGraphics.Graphics.DrawImage(capturedImage, AutoScrollPosition.X, AutoScrollPosition.Y,
+				bufferedGraphics.Graphics.DrawImage(capturedImage, AutoScrollPosition.X, AutoScrollPosition.Y + headerPanel.Height,
 				capturedImage.Width, capturedImage.Height);
 
 				// Draw the rectangle if it exists
