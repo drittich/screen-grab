@@ -150,10 +150,14 @@ namespace ScreenGrab
 		}
 
 
+		// Update WndProc to close any active notification before starting the selection process
 		protected override void WndProc(ref Message m)
 		{
 			if (m.Msg == WM_HOTKEY)
 			{
+				// Close any active notification before starting the screenshot process
+				CloseActiveNotification();
+
 				StartSelectionProcess();
 			}
 			base.WndProc(ref m);
@@ -421,13 +425,6 @@ namespace ScreenGrab
 				{
 					bitmapToSave.Save(filePath, System.Drawing.Imaging.ImageFormat.Png);
 				}
-				//MessageBox.Show(
-				//	$"Image saved to {filePath}",
-				//	"Save Successful",
-				//	MessageBoxButtons.OK,
-				//	MessageBoxIcon.Information,
-				//	MessageBoxDefaultButton.Button1,
-				//	MessageBoxOptions.DefaultDesktopOnly | MessageBoxOptions.ServiceNotification);
 
 				ShowSilentNotification($"Image saved to {filePath}");
 
@@ -443,8 +440,14 @@ namespace ScreenGrab
 			}
 		}
 
+		// Add this field to track the current notification form
+		private Form? activeToastNotification = null;
+
 		private void ShowSilentNotification(string message)
 		{
+			// Close any existing notification first
+			CloseActiveNotification();
+
 			// Create a form that looks like a toast notification
 			Form toast = new Form
 			{
@@ -456,6 +459,9 @@ namespace ScreenGrab
 				TopMost = true,
 				Padding = new Padding(20) // Add padding around text
 			};
+
+			// Store reference to the active notification
+			activeToastNotification = toast;
 
 			// Add message label
 			Label label = new Label
@@ -475,7 +481,7 @@ namespace ScreenGrab
 				SizeF textSize = g.MeasureString(message, label.Font, new SizeF(400, 1000));
 
 				// Set minimum width and height values
-				int width = Math.Max(800, (int)textSize.Width + 40);
+				int width = Math.Max(850, (int)textSize.Width + 40);
 				int height = Math.Max(80, (int)textSize.Height + 40);
 
 				// Set the form size based on the text measurements
@@ -494,16 +500,42 @@ namespace ScreenGrab
 			// Round the corners of the form
 			toast.Region = Region.FromHrgn(CreateRoundRectRgn(0, 0, toast.Width, toast.Height, 15, 15));
 
+			// Handle form closing to clear the reference
+			toast.FormClosed += (s, e) => activeToastNotification = null;
+
 			// Show toast and automatically close after 3 seconds
 			toast.Show();
 
 			Task.Delay(3000).ContinueWith(t =>
 			{
-				if (toast.InvokeRequired)
-					toast.Invoke(new Action(() => toast.Close()));
-				else
-					toast.Close();
+				if (activeToastNotification == toast) // Only close if it's still the active notification
+				{
+					if (toast.InvokeRequired && !toast.IsDisposed)
+						toast.Invoke(new Action(() => toast.Close()));
+					else if (!toast.IsDisposed)
+						toast.Close();
+				}
 			});
+		}
+
+		// Add helper method to close any active notification
+		private void CloseActiveNotification()
+		{
+			if (activeToastNotification != null && !activeToastNotification.IsDisposed)
+			{
+				try
+				{
+					if (activeToastNotification.InvokeRequired)
+						activeToastNotification.Invoke(new Action(() => activeToastNotification.Close()));
+					else
+						activeToastNotification.Close();
+				}
+				catch (ObjectDisposedException)
+				{
+					// Form may have been disposed in another thread
+				}
+				activeToastNotification = null;
+			}
 		}
 
 
@@ -648,16 +680,6 @@ namespace ScreenGrab
 			}
 		}
 
-		//private void AddRedBorder(Rectangle selection)
-		//{
-		//	if (capturedImage == null) return;
-
-		//	using Graphics g = Graphics.FromImage(capturedImage);
-		//	using Pen redPen = new Pen(Color.Red, 5);
-		//	DrawRoundedRectangle(g, redPen, selection, 10); // Add rounded corners with a radius of 10
-		//	Invalidate(); // Trigger repaint to show the updated image
-		//}
-
 		private void DrawRoundedRectangle(Graphics g, Pen pen, Rectangle rect, int cornerRadius)
 		{
 			using GraphicsPath path = new GraphicsPath();
@@ -680,42 +702,6 @@ namespace ScreenGrab
 
 		private void Form1_Load(object sender, EventArgs e)
 		{
-			// Add a small delay to ensure the form handle is created
-			//BeginInvoke(new Action(() =>
-			//{
-			//	// Try to register the hotkey with a different ID
-			//	bool isHotKeyRegistered = RegisterHotKey(Handle, 100, (uint)(MOD_CONTROL | MOD_ALT), (uint)Keys.F12);
-			//
-			//	// If that fails, try another key combination
-			//	if (!isHotKeyRegistered)
-			//	{
-			//		int error = Marshal.GetLastWin32Error();
-			//		MessageBox.Show($"Failed to register Ctrl+Alt+F12. Error code: {error}", "Error",
-			//			MessageBoxButtons.OK, MessageBoxIcon.Warning);
-			//
-			//		// Try a different key combination
-			//		isHotKeyRegistered = RegisterHotKey(Handle, 101, (uint)(MOD_CONTROL | MOD_ALT), (uint)Keys.PrintScreen);
-			//
-			//		if (isHotKeyRegistered)
-			//		{
-			//			//MessageBox.Show("Hotkey registered: Ctrl+Alt+PrintScreen", "Info",
-			//			//	MessageBoxButtons.OK, MessageBoxIcon.Information);
-			//		}
-			//		else
-			//		{
-			//			error = Marshal.GetLastWin32Error();
-			//			MessageBox.Show($"Failed to register alternate hotkey. Error code: {error}", "Error",
-			//				MessageBoxButtons.OK, MessageBoxIcon.Error);
-			//		}
-			//	}
-			//	else
-			//	{
-			//		//MessageBox.Show("Hotkey registered: Ctrl+Alt+F12", "Info",
-			//		//	MessageBoxButtons.OK, MessageBoxIcon.Information);
-			//	}
-			//}));
-
-			// Add this line to enable auto-scrolling
 			AutoScroll = true;
 		}
 	}
@@ -761,7 +747,6 @@ namespace ScreenGrab
 				SetForegroundWindow(Handle);
 			};
 		}
-
 
 		private void SelectionForm_MouseDown(object? sender, MouseEventArgs e)
 		{
