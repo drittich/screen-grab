@@ -17,7 +17,7 @@ static class Program
 		// Create a NotifyIcon for the system tray
 		NotifyIcon trayIcon = new NotifyIcon
 		{
-			Icon = SystemIcons.Application,
+			Icon = new Icon("icon.ico"),
 			Visible = true,
 			Text = "ScreenGrab",
 			ContextMenuStrip = new ContextMenuStrip()

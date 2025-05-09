@@ -1,5 +1,5 @@
-using System.Runtime.InteropServices;
 using System.Drawing.Drawing2D;
+using System.Runtime.InteropServices;
 
 namespace ScreenGrab
 {
@@ -11,12 +11,15 @@ namespace ScreenGrab
 
 		public Form1() : base()
 		{
+			this.Icon = new Icon(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "icon.ico"));
+
 			this.SetStyle(
 				ControlStyles.ResizeRedraw     // repaint on Resize
 			  | ControlStyles.AllPaintingInWmPaint // skip WM_ERASEBKGND, paint everything in one go
 			  | ControlStyles.UserPaint        // you’re handling all painting
 			, true);
 			this.DoubleBuffered = true; // Enable double buffering for the form
+
 
 			headerPanel = new Panel
 			{
@@ -65,6 +68,7 @@ namespace ScreenGrab
 				copyButton.Visible = true;
 				saveButton.Visible = true;
 			};
+
 			InitializeComponent();
 
 			this.HandleCreated += Form1_HandleCreated;

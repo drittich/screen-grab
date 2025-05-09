@@ -28,6 +28,7 @@ partial class Form1
 	/// </summary>
 	private void InitializeComponent()
 	{
+		System.ComponentModel.ComponentResourceManager resources = new System.ComponentModel.ComponentResourceManager(typeof(Form1));
 		SuspendLayout();
 		// 
 		// Form1
@@ -35,6 +36,7 @@ partial class Form1
 		AutoScaleDimensions = new SizeF(13F, 32F);
 		AutoScaleMode = AutoScaleMode.Font;
 		ClientSize = new Size(800, 450);
+		Icon = (Icon)resources.GetObject("$this.Icon");
 		Name = "Form1";
 		Text = "Form1";
 		Load += Form1_Load;
