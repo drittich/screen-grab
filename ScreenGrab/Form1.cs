@@ -421,8 +421,16 @@ namespace ScreenGrab
 				{
 					bitmapToSave.Save(filePath, System.Drawing.Imaging.ImageFormat.Png);
 				}
-				MessageBox.Show($"Image saved to {filePath}", "Save Successful",
-					MessageBoxButtons.OK, MessageBoxIcon.Information);
+				//MessageBox.Show(
+				//	$"Image saved to {filePath}",
+				//	"Save Successful",
+				//	MessageBoxButtons.OK,
+				//	MessageBoxIcon.Information,
+				//	MessageBoxDefaultButton.Button1,
+				//	MessageBoxOptions.DefaultDesktopOnly | MessageBoxOptions.ServiceNotification);
+
+				ShowSilentNotification($"Image saved to {filePath}");
+
 
 				// Reset form state before hiding
 				ResetFormState();
@@ -434,6 +442,83 @@ namespace ScreenGrab
 					MessageBoxButtons.OK, MessageBoxIcon.Error);
 			}
 		}
+
+		private void ShowSilentNotification(string message)
+		{
+			// Create a form that looks like a toast notification
+			Form toast = new Form
+			{
+				FormBorderStyle = FormBorderStyle.None,
+				StartPosition = FormStartPosition.Manual,
+				BackColor = Color.DarkSlateGray,
+				Opacity = 0.9,
+				ShowInTaskbar = false,
+				TopMost = true,
+				Padding = new Padding(20) // Add padding around text
+			};
+
+			// Add message label
+			Label label = new Label
+			{
+				Text = message,
+				ForeColor = Color.White,
+				AutoSize = false,
+				TextAlign = ContentAlignment.MiddleCenter,
+				Font = new Font("Segoe UI", 10),
+				Dock = DockStyle.Fill
+			};
+
+			// Calculate the required size
+			using (Graphics g = toast.CreateGraphics())
+			{
+				// Measure text with some extra space for padding
+				SizeF textSize = g.MeasureString(message, label.Font, new SizeF(400, 1000));
+
+				// Set minimum width and height values
+				int width = Math.Max(800, (int)textSize.Width + 40);
+				int height = Math.Max(80, (int)textSize.Height + 40);
+
+				// Set the form size based on the text measurements
+				toast.Size = new Size(width, height);
+			}
+
+			toast.Controls.Add(label);
+
+			// Position in center of active screen
+			Screen currentScreen = Screen.FromPoint(Cursor.Position);
+			toast.Location = new Point(
+				currentScreen.WorkingArea.Left + (currentScreen.WorkingArea.Width - toast.Width) / 2,
+				currentScreen.WorkingArea.Top + (currentScreen.WorkingArea.Height - toast.Height) / 2
+			);
+
+			// Round the corners of the form
+			toast.Region = Region.FromHrgn(CreateRoundRectRgn(0, 0, toast.Width, toast.Height, 15, 15));
+
+			// Show toast and automatically close after 3 seconds
+			toast.Show();
+
+			Task.Delay(3000).ContinueWith(t =>
+			{
+				if (toast.InvokeRequired)
+					toast.Invoke(new Action(() => toast.Close()));
+				else
+					toast.Close();
+			});
+		}
+
+
+		// Add this P/Invoke for rounded corners
+		[DllImport("Gdi32.dll", EntryPoint = "CreateRoundRectRgn")]
+		private static extern IntPtr CreateRoundRectRgn(
+			int nLeftRect,
+			int nTopRect,
+			int nRightRect,
+			int nBottomRect,
+			int nWidthEllipse,
+			int nHeightEllipse
+		);
+
+
 
 		// Add this helper method to reset form state
 		private void ResetFormState()
