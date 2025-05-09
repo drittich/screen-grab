@@ -1,4 +1,5 @@
 using System.Runtime.InteropServices;
+using System.Drawing.Drawing2D;
 
 namespace ScreenGrab
 {
@@ -282,7 +283,7 @@ namespace ScreenGrab
 				if (dragRectangle.HasValue)
 				{
 					using Pen pen = new Pen(Color.Red, 2);
-					bufferedGraphics.Graphics.DrawRectangle(pen, dragRectangle.Value);
+					DrawRoundedRectangle(bufferedGraphics.Graphics, pen, dragRectangle.Value, 10); // Rounded corners with radius 10
 				}
 
 				// Render the buffered graphics
@@ -436,8 +437,19 @@ namespace ScreenGrab
 
 			using Graphics g = Graphics.FromImage(capturedImage);
 			using Pen redPen = new Pen(Color.Red, 5);
-			g.DrawRectangle(redPen, selection);
+			DrawRoundedRectangle(g, redPen, selection, 10); // Add rounded corners with a radius of 10
 			Invalidate(); // Trigger repaint to show the updated image
+		}
+
+		private void DrawRoundedRectangle(Graphics g, Pen pen, Rectangle rect, int cornerRadius)
+		{
+			using GraphicsPath path = new GraphicsPath();
+			path.AddArc(rect.X, rect.Y, cornerRadius, cornerRadius, 180, 90);
+			path.AddArc(rect.Right - cornerRadius, rect.Y, cornerRadius, cornerRadius, 270, 90);
+			path.AddArc(rect.Right - cornerRadius, rect.Bottom - cornerRadius, cornerRadius, cornerRadius, 0, 90);
+			path.AddArc(rect.X, rect.Bottom - cornerRadius, cornerRadius, cornerRadius, 90, 90);
+			path.CloseFigure();
+			g.DrawPath(pen, path);
 		}
 
 		protected override void OnFormClosing(FormClosingEventArgs e)
