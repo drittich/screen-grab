@@ -9,6 +9,10 @@ namespace ScreenGrab
 		private Button copyButton;
 		private Button saveButton;
 
+		// Add these fields near the other private fields in Form1 class
+		private Stack<Rectangle> rectangleHistory = new Stack<Rectangle>();
+		private Stack<Rectangle> redoStack = new Stack<Rectangle>();
+
 		public Form1() : base()
 		{
 			Icon = new Icon(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "icon.ico"));
@@ -130,6 +134,18 @@ namespace ScreenGrab
 				Hide();
 				return true; // Indicate that the key press was handled
 			}
+			else if (keyData == (Keys.Control | Keys.Z) && rectangleHistory.Count > 0)
+			{
+				// Undo last rectangle
+				UndoLastRectangle();
+				return true;
+			}
+			else if (keyData == (Keys.Control | Keys.Y) && redoStack.Count > 0)
+			{
+				// Redo last undone rectangle
+				RedoRectangle();
+				return true;
+			}
 			return base.ProcessCmdKey(ref msg, keyData);
 		}
 
@@ -201,6 +217,11 @@ namespace ScreenGrab
 			capturedImage?.Dispose();
 			capturedImage = bitmap;
 
+			// Store the original image for undo functionality
+			originalImage?.Dispose();
+			originalImage = new Bitmap(capturedImage);
+			hasOriginalImage = true;
+
 			// Suspend layout while making UI changes
 			SuspendLayout();
 
@@ -228,6 +249,11 @@ namespace ScreenGrab
 			// Clear any remaining display state
 			dragStartPoint = null;
 			dragRectangle = null;
+
+			// Clear undo/redo stacks
+			rectangleHistory.Clear();
+			redoStack.Clear();
+
 
 			// Set title with dimensions
 			Text = $"ScreenGrab - {bitmap.Width}x{bitmap.Height}";
@@ -338,24 +364,24 @@ namespace ScreenGrab
 
 		protected override void OnMouseUp(MouseEventArgs e)
 		{
-		    if (e.Button == MouseButtons.Left && dragRectangle.HasValue)
-		    {
-		        // Ensure the rectangle has a minimum valid size (mouse was dragged sufficiently)
-		        const int MinDimension = 10; // Minimum width and height for a valid rectangle
-		        if (dragRectangle.Value.Width >= MinDimension && dragRectangle.Value.Height >= MinDimension)
-		        {
-		            AddRedBorder(dragRectangle.Value);
-		        }
-		        dragStartPoint = null;
-		        dragRectangle = null;
-		        Invalidate();
-		    }
-		    else
-		    {
-		        // Hide both buttons after mouse up
-		        copyButton.Visible = false;
-		        saveButton.Visible = false;
-		    }
+			if (e.Button == MouseButtons.Left && dragRectangle.HasValue)
+			{
+				// Ensure the rectangle has a minimum valid size (mouse was dragged sufficiently)
+				const int MinDimension = 10; // Minimum width and height for a valid rectangle
+				if (dragRectangle.Value.Width >= MinDimension && dragRectangle.Value.Height >= MinDimension)
+				{
+					AddRedBorder(dragRectangle.Value);
+				}
+				dragStartPoint = null;
+				dragRectangle = null;
+				Invalidate();
+			}
+			else
+			{
+				// Hide both buttons after mouse up
+				copyButton.Visible = false;
+				saveButton.Visible = false;
+			}
 		}
 
 
@@ -412,6 +438,16 @@ namespace ScreenGrab
 			AutoScrollPosition = Point.Empty;
 			dragStartPoint = null;
 			dragRectangle = null;
+
+			// Clear undo/redo stacks
+			rectangleHistory.Clear();
+			redoStack.Clear();
+			if (originalImage != null)
+			{
+				originalImage.Dispose();
+				originalImage = null;
+			}
+			hasOriginalImage = false;
 		}
 
 
@@ -430,15 +466,107 @@ namespace ScreenGrab
 			}
 		}
 
+		// Modify the AddRedBorder method to track rectangles
 		private void AddRedBorder(Rectangle selection)
 		{
 			if (capturedImage == null) return;
 
+			// Add to history
+			rectangleHistory.Push(selection);
+			// Clear redo stack when a new rectangle is added
+			redoStack.Clear();
+
+			// Draw the rectangle on the image
 			using Graphics g = Graphics.FromImage(capturedImage);
 			using Pen redPen = new Pen(Color.Red, 5);
 			DrawRoundedRectangle(g, redPen, selection, 10); // Add rounded corners with a radius of 10
 			Invalidate(); // Trigger repaint to show the updated image
 		}
+
+		// Add these new methods for undo/redo functionality
+		private void UndoLastRectangle()
+		{
+			if (capturedImage == null || rectangleHistory.Count == 0) return;
+
+			// Pop the last rectangle from history and add to redo stack
+			Rectangle lastRect = rectangleHistory.Pop();
+			redoStack.Push(lastRect);
+
+			// Recreate the image from scratch with all rectangles except the last one
+			RedrawImage();
+		}
+
+		private void RedoRectangle()
+		{
+			if (capturedImage == null || redoStack.Count == 0) return;
+
+			// Pop the last undone rectangle and add back to history
+			Rectangle redoRect = redoStack.Pop();
+			rectangleHistory.Push(redoRect);
+
+			// Draw this rectangle on the image
+			using Graphics g = Graphics.FromImage(capturedImage);
+			using Pen redPen = new Pen(Color.Red, 5);
+			DrawRoundedRectangle(g, redPen, redoRect, 10);
+
+			Invalidate(); // Refresh display
+		}
+
+		private void RedrawImage()
+		{
+			if (capturedImage == null) return;
+
+			// Store the original captured image if this is our first undo operation
+			if (!hasOriginalImage)
+			{
+				StoreOriginalImage();
+			}
+
+			// Restore from original clean image
+			using (Graphics g = Graphics.FromImage(capturedImage))
+			{
+				g.Clear(Color.Transparent);
+				g.DrawImage(originalImage, 0, 0);
+			}
+
+			// Redraw all rectangles in history
+			using (Graphics g = Graphics.FromImage(capturedImage))
+			{
+				using Pen redPen = new Pen(Color.Red, 5);
+				// Create a temporary copy of the history to preserve order
+				Rectangle[] tempHistory = rectangleHistory.Reverse().ToArray();
+				foreach (Rectangle rect in tempHistory)
+				{
+					DrawRoundedRectangle(g, redPen, rect, 10);
+				}
+			}
+
+			Invalidate(); // Refresh the display
+		}
+
+		// Add fields to store the original image
+		private Bitmap? originalImage = null;
+		private bool hasOriginalImage = false;
+
+		// Method to store the original image for the first undo operation
+		private void StoreOriginalImage()
+		{
+			if (capturedImage != null && !hasOriginalImage)
+			{
+				originalImage = new Bitmap(capturedImage);
+				hasOriginalImage = true;
+			}
+		}
+
+		//private void AddRedBorder(Rectangle selection)
+		//{
+		//	if (capturedImage == null) return;
+
+		//	using Graphics g = Graphics.FromImage(capturedImage);
+		//	using Pen redPen = new Pen(Color.Red, 5);
+		//	DrawRoundedRectangle(g, redPen, selection, 10); // Add rounded corners with a radius of 10
+		//	Invalidate(); // Trigger repaint to show the updated image
+		//}
 
 		private void DrawRoundedRectangle(Graphics g, Pen pen, Rectangle rect, int cornerRadius)
 		{
@@ -456,6 +584,7 @@ namespace ScreenGrab
 			UnregisterHotKey(Handle, 100);
 			UnregisterHotKey(Handle, 101);
 			capturedImage?.Dispose();
+			originalImage?.Dispose();
 			base.OnFormClosing(e);
 		}
 
