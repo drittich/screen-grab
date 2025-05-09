@@ -1,7 +1,12 @@
+using System.Threading;
+
 namespace ScreenGrab;
 
 static class Program
 {
+	private static Mutex? _mutex;
+	private const string MutexName = "ScreenGrabApplicationMutex";
+
 	/// <summary>
 	///  The main entry point for the application.
 	/// </summary>
@@ -9,6 +14,16 @@ static class Program
 	static void Main()
 	{
 		ApplicationConfiguration.Initialize();
+
+		// Try to create a new mutex
+		bool createdNew;
+		_mutex = new Mutex(true, MutexName, out createdNew);
+
+		if (!createdNew)
+		{
+			MessageBox.Show("ScreenGrab is already running.", "ScreenGrab", MessageBoxButtons.OK, MessageBoxIcon.Information);
+			return;
+		}
 
 		// Create the main form but don't show it initially
 		Form1 mainForm = new Form1();
@@ -35,6 +50,15 @@ static class Program
 
 		// Run the application with the main form as the message loop owner
 		// but keep it invisible
-		Application.Run(mainForm);
+		try
+		{
+			Application.Run(mainForm);
+		}
+		finally
+		{
+			// Clean up the mutex
+			_mutex?.ReleaseMutex();
+			_mutex?.Dispose();
+		}
 	}
 }
