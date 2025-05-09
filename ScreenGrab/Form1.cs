@@ -338,19 +338,24 @@ namespace ScreenGrab
 
 		protected override void OnMouseUp(MouseEventArgs e)
 		{
-			if (e.Button == MouseButtons.Left && dragRectangle.HasValue)
-			{
-				AddRedBorder(dragRectangle.Value);
-				dragStartPoint = null;
-				dragRectangle = null;
-				Invalidate();
-			}
-			else
-			{
-				// Hide both buttons after mouse up
-				copyButton.Visible = false;
-				saveButton.Visible = false;
-			}
+		    if (e.Button == MouseButtons.Left && dragRectangle.HasValue)
+		    {
+		        // Ensure the rectangle has a minimum valid size (mouse was dragged sufficiently)
+		        const int MinDimension = 10; // Minimum width and height for a valid rectangle
+		        if (dragRectangle.Value.Width >= MinDimension && dragRectangle.Value.Height >= MinDimension)
+		        {
+		            AddRedBorder(dragRectangle.Value);
+		        }
+		        dragStartPoint = null;
+		        dragRectangle = null;
+		        Invalidate();
+		    }
+		    else
+		    {
+		        // Hide both buttons after mouse up
+		        copyButton.Visible = false;
+		        saveButton.Visible = false;
+		    }
 		}
 
 
