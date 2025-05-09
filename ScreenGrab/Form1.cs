@@ -8,6 +8,7 @@ namespace ScreenGrab
 		private Panel headerPanel;
 		private Button copyButton;
 		private Button saveButton;
+		private Button saveAndCopyPathButton;
 
 		// Add these fields near the other private fields in Form1 class
 		private Stack<Rectangle> rectangleHistory = new Stack<Rectangle>();
@@ -47,8 +48,17 @@ namespace ScreenGrab
 			};
 			saveButton.Click += SaveButton_Click;
 
+			saveAndCopyPathButton = new Button
+			{
+				Text = "Save (copy path)",
+				Size = new Size(240, 40),
+				Location = new Point(200, 15)
+			};
+			saveAndCopyPathButton.Click += SaveAndCopyPathButton_Click;
+
 			headerPanel.Controls.Add(copyButton);
 			headerPanel.Controls.Add(saveButton);
+			headerPanel.Controls.Add(saveAndCopyPathButton);
 			Controls.Add(headerPanel);
 
 			Opacity = 0; // Make the form fully transparent
@@ -339,18 +349,21 @@ namespace ScreenGrab
 		{
 			if (capturedImage != null && !dragStartPoint.HasValue)
 			{
-				// Calculate button positions: center both buttons as a group
+				// Calculate button positions: center all buttons as a group
 				int gap = 10;
-				int groupWidth = copyButton.Width + saveButton.Width + gap;
+				int groupWidth = copyButton.Width + saveButton.Width + saveAndCopyPathButton.Width + (gap * 2);
 				int leftStart = (ClientSize.Width - groupWidth) / 2;
 
 				copyButton.Visible = true;
 				saveButton.Visible = true;
+				saveAndCopyPathButton.Visible = true;
 				copyButton.BringToFront();
 				saveButton.BringToFront();
+				saveAndCopyPathButton.BringToFront();
 
 				copyButton.Location = new Point(leftStart, 10);
 				saveButton.Location = new Point(leftStart + copyButton.Width + gap, 10);
+				saveAndCopyPathButton.Location = new Point(leftStart + copyButton.Width + saveButton.Width + (gap * 2), 10);
 			}
 
 			if (e.Button == MouseButtons.Left && dragStartPoint.HasValue)
@@ -362,9 +375,10 @@ namespace ScreenGrab
 					Math.Abs(dragStartPoint.Value.X - currentPoint.X),
 					Math.Abs(dragStartPoint.Value.Y - currentPoint.Y)
 				);
-				// Hide both buttons during drag
+				// Hide all buttons during drag
 				copyButton.Visible = false;
 				saveButton.Visible = false;
+				saveAndCopyPathButton.Visible = false;
 				Invalidate();
 			}
 
@@ -387,9 +401,10 @@ namespace ScreenGrab
 			}
 			else
 			{
-				// Hide both buttons after mouse up
+				// Hide all buttons after mouse up
 				copyButton.Visible = false;
 				saveButton.Visible = false;
+				saveAndCopyPathButton.Visible = false;
 			}
 		}
 
@@ -406,32 +421,47 @@ namespace ScreenGrab
 			}
 		}
 
+		// Add new method to consolidate the save functionality
+		private string SaveScreenshot(bool copyPathToClipboard)
+		{
+			if (capturedImage == null)
+			{
+				MessageBox.Show("No image captured.", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+				return string.Empty;
+			}
+
+			string downloadsPath = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile) + @"\Downloads";
+			string timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss");
+			string filePath = Path.Combine(downloadsPath, $"Screenshot_{timestamp}.png");
+
+			// Save a clone of the captured image to exclude form controls
+			using (Bitmap bitmapToSave = new Bitmap(capturedImage))
+			{
+				bitmapToSave.Save(filePath, System.Drawing.Imaging.ImageFormat.Png);
+			}
+
+			if (copyPathToClipboard)
+			{
+				Clipboard.SetText(filePath);
+				ShowSilentNotification($"Image saved to {filePath}\nPath copied to clipboard");
+			}
+			else
+			{
+				ShowSilentNotification($"Image saved to {filePath}");
+			}
+
+			// Reset form state before hiding
+			ResetFormState();
+			Hide();
+
+			return filePath;
+		}
+
 		private void SaveButton_Click(object? sender, EventArgs e)
 		{
 			try
 			{
-				if (capturedImage == null)
-				{
-					MessageBox.Show("No image captured.", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
-					return;
-				}
-
-				string downloadsPath = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile) + @"\Downloads";
-				string timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss");
-				string filePath = Path.Combine(downloadsPath, $"Screenshot_{timestamp}.png");
-
-				// Save a clone of the captured image to exclude form controls
-				using (Bitmap bitmapToSave = new Bitmap(capturedImage))
-				{
-					bitmapToSave.Save(filePath, System.Drawing.Imaging.ImageFormat.Png);
-				}
-
-				ShowSilentNotification($"Image saved to {filePath}");
-
-
-				// Reset form state before hiding
-				ResetFormState();
-				Hide();
+				SaveScreenshot(false);
 			}
 			catch (Exception ex)
 			{
@@ -440,15 +470,26 @@ namespace ScreenGrab
 			}
 		}
 
-		// Add this field to track the current notification form
+		private void SaveAndCopyPathButton_Click(object? sender, EventArgs e)
+		{
+			try
+			{
+				SaveScreenshot(true);
+			}
+			catch (Exception ex)
+			{
+				MessageBox.Show($"Failed to save image: {ex.Message}", "Error",
+					MessageBoxButtons.OK, MessageBoxIcon.Error);
+			}
+		}
+
+		// field to track the current notification form
 		private Form? activeToastNotification = null;
 
 		private void ShowSilentNotification(string message)
 		{
-			// Close any existing notification first
 			CloseActiveNotification();
 
-			// Create a form that looks like a toast notification
 			Form toast = new Form
 			{
 				FormBorderStyle = FormBorderStyle.None,
@@ -457,7 +498,7 @@ namespace ScreenGrab
 				Opacity = 0.9,
 				ShowInTaskbar = false,
 				TopMost = true,
-				Padding = new Padding(20) // Add padding around text
+				Padding = new Padding(20)
 			};
 
 			// Store reference to the active notification
