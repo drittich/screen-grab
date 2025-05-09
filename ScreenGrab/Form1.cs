@@ -9,6 +9,11 @@ namespace ScreenGrab
 
 		public Form1() : base()
 		{
+			this.SetStyle(
+				ControlStyles.ResizeRedraw     // repaint on Resize
+			  | ControlStyles.AllPaintingInWmPaint // skip WM_ERASEBKGND, paint everything in one go
+			  | ControlStyles.UserPaint        // you’re handling all painting
+			, true);
 			this.DoubleBuffered = true; // Enable double buffering for the form
 
 			// Initialize the copy button
@@ -75,6 +80,15 @@ namespace ScreenGrab
 			UnregisterHotKey(this.Handle, 101);
 		}
 
+
+		/// <summary>
+		/// Always clear the old background before drawing the new image.
+		/// </summary>
+		protected override void OnPaintBackground(PaintEventArgs e)
+		{
+			e.Graphics.Clear(this.BackColor);
+		}
+
 		// Define modifier keys
 		private const int WM_HOTKEY = 0x0312; // Define WM_HOTKEY constant
 		private const uint MOD_CONTROL = 0x0002; // Control key
@@ -105,6 +119,18 @@ namespace ScreenGrab
 		{
 			StartSelectionProcess();
 		}
+
+		protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
+		{
+			if (keyData == Keys.Escape)
+			{
+				// Hide the form when Esc is pressed
+				this.Hide();
+				return true; // Indicate that the key press was handled
+			}
+			return base.ProcessCmdKey(ref msg, keyData);
+		}
+
 
 		protected override void WndProc(ref Message m)
 		{
@@ -172,27 +198,42 @@ namespace ScreenGrab
 			capturedImage?.Dispose();
 			capturedImage = bitmap;
 
-			// Resize form to fit the captured image
-			this.ClientSize = new Size(bitmap.Width, bitmap.Height);
+			// **IMPORTANT**: resize the client area to exactly the new image size
+			this.SuspendLayout();
+			this.FormBorderStyle = FormBorderStyle.None;
+			this.AutoScroll = false;
+			this.AutoScrollMinSize = Size.Empty;
+			this.ClientSize = new Size(capturedImage.Width, capturedImage.Height);
+			this.ResumeLayout();
 
-			// Remove title bar and control buttons
+			// Reset form completely - clear any accumulated changes
+			this.Opacity = 1.0;
+			this.WindowState = FormWindowState.Normal;
+			this.ShowInTaskbar = true;
+			this.BackColor = SystemColors.Control;
+			this.TransparencyKey = Color.Empty;
+			this.AutoScrollPosition = Point.Empty; // Reset scroll position
+
+			// Clear any remaining display state
+			dragStartPoint = null;
+			dragRectangle = null;
+
+			// Ensure the form's client area exactly matches the bitmap size
+			// This is critical to avoid black borders
 			this.FormBorderStyle = FormBorderStyle.FixedSingle;
 			this.ControlBox = false;
 			this.MinimizeBox = false;
 			this.MaximizeBox = false;
+			this.ClientSize = new Size(bitmap.Width, bitmap.Height);
 
-			// Make the form visible with a title bar
+			// Disable auto scrolling to prevent extra padding that causes the border
+			this.AutoScroll = false;
+			this.AutoScrollMinSize = new Size(0, 0); // Clear auto-scroll size
+
+			// Set title with dimensions
 			this.Text = $"ScreenGrab - {bitmap.Width}x{bitmap.Height}";
-			this.Opacity = 1.0;  // Ensure full opacity
-			this.WindowState = FormWindowState.Normal;
-			this.ShowInTaskbar = true;
 
-			// Ensure we're not transparent or hidden in any way
-			this.BackColor = SystemColors.Control;
-			this.TransparencyKey = Color.Empty;
-
-			// Add this to your CaptureSelectedRegion method before the Show() call
-			// Ensure the form appears in a visible area of the screen
+			// Position the form on screen
 			Screen currentScreen = Screen.FromPoint(Cursor.Position);
 			int x = Math.Max(currentScreen.WorkingArea.X,
 				Math.Min(Cursor.Position.X - (bitmap.Width / 2),
@@ -203,18 +244,19 @@ namespace ScreenGrab
 
 			this.Location = new Point(x, y);
 
-			// Show the form and bring it to the front
+			// Show the form and bring it to front
 			Show();
 			SetForegroundWindow(this.Handle);
 			this.Activate();
 			this.BringToFront();
 			this.Focus();
 
-			// Ensure UI is updated
-			Application.DoEvents();
-
-			this.Refresh();
+			// Force a complete UI refresh
+			this.Invalidate();  // marks entire client rectangle
+			this.Update();      // synchronously repaints
 		}
+
+
 
 		private Point? dragStartPoint = null;
 		private Rectangle? dragRectangle = null;
@@ -322,13 +364,15 @@ namespace ScreenGrab
 				saveButton.Visible = false;
 			}
 		}
+
 		private void CopyButton_Click(object? sender, EventArgs e)
 		{
 			if (capturedImage != null)
 			{
 				Clipboard.SetImage(capturedImage);
 
-				// Hide the form immediately so it's out of the way for your next grab
+				// Reset form state before hiding
+				ResetFormState();
 				this.Hide();
 			}
 		}
@@ -354,12 +398,26 @@ namespace ScreenGrab
 				}
 				MessageBox.Show($"Image saved to {filePath}", "Save Successful",
 					MessageBoxButtons.OK, MessageBoxIcon.Information);
+
+				// Reset form state before hiding
+				ResetFormState();
+				this.Hide();
 			}
 			catch (Exception ex)
 			{
 				MessageBox.Show($"Failed to save image: {ex.Message}", "Error",
 					MessageBoxButtons.OK, MessageBoxIcon.Error);
 			}
+		}
+
+		// Add this helper method to reset form state
+		private void ResetFormState()
+		{
+			// Reset to initial state to prepare for next capture
+			this.FormBorderStyle = FormBorderStyle.None;
+			this.AutoScrollPosition = Point.Empty;
+			dragStartPoint = null;
+			dragRectangle = null;
 		}
 
 
