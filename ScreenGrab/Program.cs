@@ -24,7 +24,7 @@ static class Program
 		};
 
 		// Add options to the tray menu
-		trayIcon.ContextMenuStrip.Items.Add("Capture", null, (sender, e) => mainForm.StartCapture());
+		trayIcon.ContextMenuStrip.Items.Add("Capture (Ctrl-Alt-F12)", null, (sender, e) => mainForm.StartCapture());
 		trayIcon.ContextMenuStrip.Items.Add("Exit", null, (sender, e) => Application.Exit());
 
 		// Enable tray icon double-click to start capture

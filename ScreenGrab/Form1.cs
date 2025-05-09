@@ -10,7 +10,6 @@ namespace ScreenGrab
 		private Button saveButton;
 		private Button saveAndCopyPathButton;
 
-		// Add these fields near the other private fields in Form1 class
 		private Stack<Rectangle> rectangleHistory = new Stack<Rectangle>();
 		private Stack<Rectangle> redoStack = new Stack<Rectangle>();
 
@@ -19,11 +18,11 @@ namespace ScreenGrab
 			Icon = new Icon(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "icon.ico"));
 
 			SetStyle(
-				ControlStyles.ResizeRedraw     // repaint on Resize
-			  | ControlStyles.AllPaintingInWmPaint // skip WM_ERASEBKGND, paint everything in one go
-			  | ControlStyles.UserPaint        // you’re handling all painting
+				ControlStyles.ResizeRedraw
+			  | ControlStyles.AllPaintingInWmPaint
+			  | ControlStyles.UserPaint
 			, true);
-			DoubleBuffered = true; // Enable double buffering for the form
+			DoubleBuffered = true;
 
 			headerPanel = new Panel
 			{
@@ -61,12 +60,12 @@ namespace ScreenGrab
 			headerPanel.Controls.Add(saveAndCopyPathButton);
 			Controls.Add(headerPanel);
 
-			Opacity = 0; // Make the form fully transparent
-			ShowInTaskbar = false; // Hide the form from the taskbar
-			FormBorderStyle = FormBorderStyle.None; // Remove the title bar and buttons
+			Opacity = 0;
+			ShowInTaskbar = false;
+			FormBorderStyle = FormBorderStyle.None;
 			Load += (s, e) =>
 			{
-				Hide(); // Ensure the form is hidden immediately after loading
+				Hide();
 			};
 
 			// Ensure buttons are visible when mouse enters the header panel
@@ -91,7 +90,6 @@ namespace ScreenGrab
 
 		private void Form1_HandleDestroyed(object? sender, EventArgs e)
 		{
-			// clean up after ourselves
 			UnregisterHotKey(Handle, 100);
 			UnregisterHotKey(Handle, 101);
 		}
@@ -105,7 +103,6 @@ namespace ScreenGrab
 			e.Graphics.Clear(BackColor);
 		}
 
-		// Define modifier keys
 		private const int WM_HOTKEY = 0x0312; // Define WM_HOTKEY constant
 		private const uint MOD_CONTROL = 0x0002; // Control key
 		private const uint MOD_ALT = 0x0001;     // Alt key
@@ -124,13 +121,11 @@ namespace ScreenGrab
 		private SelectionForm? selectionForm;
 		private NotifyIcon? trayIcon;
 
-		// Method to store the tray icon reference
 		public void SetTrayIcon(NotifyIcon icon)
 		{
 			trayIcon = icon;
 		}
 
-		// Public method to allow starting the capture from Program.cs
 		public void StartCapture()
 		{
 			StartSelectionProcess();
@@ -140,19 +135,16 @@ namespace ScreenGrab
 		{
 			if (keyData == Keys.Escape)
 			{
-				// Hide the form when Esc is pressed
 				Hide();
-				return true; // Indicate that the key press was handled
+				return true;
 			}
 			else if (keyData == (Keys.Control | Keys.Z) && rectangleHistory.Count > 0)
 			{
-				// Undo last rectangle
 				UndoLastRectangle();
 				return true;
 			}
 			else if (keyData == (Keys.Control | Keys.Y) && redoStack.Count > 0)
 			{
-				// Redo last undone rectangle
 				RedoRectangle();
 				return true;
 			}
@@ -160,14 +152,11 @@ namespace ScreenGrab
 		}
 
 
-		// Update WndProc to close any active notification before starting the selection process
 		protected override void WndProc(ref Message m)
 		{
 			if (m.Msg == WM_HOTKEY)
 			{
-				// Close any active notification before starting the screenshot process
 				CloseActiveNotification();
-
 				StartSelectionProcess();
 			}
 			base.WndProc(ref m);
@@ -177,10 +166,8 @@ namespace ScreenGrab
 		{
 			try
 			{
-				// Ensure form is hidden before starting selection
-				Visible = false; // Ensure the form remains hidden
+				Visible = false;
 
-				// Take screenshot of entire screen
 				Rectangle screenBounds = Screen.PrimaryScreen?.Bounds
 					?? throw new InvalidOperationException("No primary screen found.");
 				Bitmap fullScreenshot = new(screenBounds.Width, screenBounds.Height);
@@ -189,7 +176,6 @@ namespace ScreenGrab
 					g.CopyFromScreen(screenBounds.Location, Point.Empty, screenBounds.Size);
 				}
 
-				// Create and show selection form with the screenshot as background
 				selectionForm = new SelectionForm(fullScreenshot);
 				selectionForm.SelectionComplete += SelectionForm_SelectionComplete;
 				selectionForm.ShowDialog();
@@ -205,12 +191,10 @@ namespace ScreenGrab
 		{
 			if (sender is SelectionForm sf)
 			{
-				// Cleanup selection form
 				sf.SelectionComplete -= SelectionForm_SelectionComplete;
 				sf.Dispose();
 				selectionForm = null;
 
-				// Only proceed if we have a valid selection
 				if (selectedRegion.Width > 0 && selectedRegion.Height > 0)
 				{
 					CaptureSelectedRegion(selectedRegion);
@@ -220,36 +204,29 @@ namespace ScreenGrab
 
 		private void CaptureSelectedRegion(Rectangle region)
 		{
-			// Capture just the selected region
 			Bitmap bitmap = new Bitmap(region.Width, region.Height);
 			using (Graphics g = Graphics.FromImage(bitmap))
 			{
 				g.CopyFromScreen(region.Location, Point.Empty, region.Size);
 			}
 
-			// Dispose the old image if it exists to prevent memory leaks
 			capturedImage?.Dispose();
 			capturedImage = bitmap;
 
-			// Store the original image for undo functionality
 			originalImage?.Dispose();
 			originalImage = new Bitmap(capturedImage);
 			hasOriginalImage = true;
 
-			// Suspend layout while making UI changes
 			SuspendLayout();
 
-			// Configure form appearance
 			FormBorderStyle = FormBorderStyle.FixedSingle;
 			ControlBox = false;
 			MinimizeBox = false;
 			MaximizeBox = false;
 
-			// Disable scrolling
 			AutoScroll = false;
 			AutoScrollMinSize = Size.Empty;
 
-			// Set exact dimensions to match the captured image
 			ClientSize = new Size(bitmap.Width, bitmap.Height + headerPanel.Height);
 
 			// Reset form visual state
@@ -322,7 +299,6 @@ namespace ScreenGrab
 					DrawRoundedRectangle(bufferedGraphics.Graphics, pen, rect, 10);
 				}
 
-
 				// Render the buffered graphics
 				bufferedGraphics.Render();
 			}
@@ -342,7 +318,6 @@ namespace ScreenGrab
 				dragRectangle = null;
 				Invalidate();
 			}
-
 		}
 
 		protected override void OnMouseMove(MouseEventArgs e)
@@ -381,9 +356,7 @@ namespace ScreenGrab
 				saveAndCopyPathButton.Visible = false;
 				Invalidate();
 			}
-
 		}
-
 
 		protected override void OnMouseUp(MouseEventArgs e)
 		{
@@ -401,13 +374,11 @@ namespace ScreenGrab
 			}
 			else
 			{
-				// Hide all buttons after mouse up
 				copyButton.Visible = false;
 				saveButton.Visible = false;
 				saveAndCopyPathButton.Visible = false;
 			}
 		}
-
 
 		private void CopyButton_Click(object? sender, EventArgs e)
 		{
@@ -421,7 +392,6 @@ namespace ScreenGrab
 			}
 		}
 
-		// Add new method to consolidate the save functionality
 		private string SaveScreenshot(bool copyPathToClipboard)
 		{
 			if (capturedImage == null)
@@ -559,7 +529,6 @@ namespace ScreenGrab
 			});
 		}
 
-		// Add helper method to close any active notification
 		private void CloseActiveNotification()
 		{
 			if (activeToastNotification != null && !activeToastNotification.IsDisposed)
@@ -591,9 +560,6 @@ namespace ScreenGrab
 			int nHeightEllipse
 		);
 
-
-
-		// Add this helper method to reset form state
 		private void ResetFormState()
 		{
 			// Reset to initial state to prepare for next capture
@@ -629,7 +595,6 @@ namespace ScreenGrab
 			}
 		}
 
-		// Modify the AddRedBorder method to track rectangles
 		private void AddRedBorder(Rectangle selection)
 		{
 			if (capturedImage == null) return;
