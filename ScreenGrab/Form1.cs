@@ -11,15 +11,14 @@ namespace ScreenGrab
 
 		public Form1() : base()
 		{
-			this.Icon = new Icon(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "icon.ico"));
+			Icon = new Icon(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "icon.ico"));
 
-			this.SetStyle(
+			SetStyle(
 				ControlStyles.ResizeRedraw     // repaint on Resize
 			  | ControlStyles.AllPaintingInWmPaint // skip WM_ERASEBKGND, paint everything in one go
 			  | ControlStyles.UserPaint        // you’re handling all painting
 			, true);
-			this.DoubleBuffered = true; // Enable double buffering for the form
-
+			DoubleBuffered = true; // Enable double buffering for the form
 
 			headerPanel = new Panel
 			{
@@ -46,20 +45,14 @@ namespace ScreenGrab
 
 			headerPanel.Controls.Add(copyButton);
 			headerPanel.Controls.Add(saveButton);
-			this.Controls.Add(headerPanel);
+			Controls.Add(headerPanel);
 
-			// Initialize the save button without setting Location; it will be handled dynamically.
-
-			// keep it visible while over the button, hide it when you leave it
-
-			// Add a similar MouseLeave event to the save button
-
-			this.Opacity = 0; // Make the form fully transparent
-			this.ShowInTaskbar = false; // Hide the form from the taskbar
-			this.FormBorderStyle = FormBorderStyle.None; // Remove the title bar and buttons
-			this.Load += (s, e) =>
+			Opacity = 0; // Make the form fully transparent
+			ShowInTaskbar = false; // Hide the form from the taskbar
+			FormBorderStyle = FormBorderStyle.None; // Remove the title bar and buttons
+			Load += (s, e) =>
 			{
-				this.Hide(); // Ensure the form is hidden immediately after loading
+				Hide(); // Ensure the form is hidden immediately after loading
 			};
 
 			// Ensure buttons are visible when mouse enters the header panel
@@ -71,22 +64,22 @@ namespace ScreenGrab
 
 			InitializeComponent();
 
-			this.HandleCreated += Form1_HandleCreated;
-			this.HandleDestroyed += Form1_HandleDestroyed;
+			HandleCreated += Form1_HandleCreated;
+			HandleDestroyed += Form1_HandleDestroyed;
 		}
 
 		private void Form1_HandleCreated(object? sender, EventArgs e)
 		{
 			// register both combos every time we get a handle
-			RegisterHotKey(this.Handle, 100, MOD_CONTROL | MOD_ALT, (uint)Keys.F12);
-			RegisterHotKey(this.Handle, 101, MOD_CONTROL | MOD_ALT, (uint)Keys.PrintScreen);
+			RegisterHotKey(Handle, 100, MOD_CONTROL | MOD_ALT, (uint)Keys.F12);
+			RegisterHotKey(Handle, 101, MOD_CONTROL | MOD_ALT, (uint)Keys.PrintScreen);
 		}
 
 		private void Form1_HandleDestroyed(object? sender, EventArgs e)
 		{
 			// clean up after ourselves
-			UnregisterHotKey(this.Handle, 100);
-			UnregisterHotKey(this.Handle, 101);
+			UnregisterHotKey(Handle, 100);
+			UnregisterHotKey(Handle, 101);
 		}
 
 
@@ -95,7 +88,7 @@ namespace ScreenGrab
 		/// </summary>
 		protected override void OnPaintBackground(PaintEventArgs e)
 		{
-			e.Graphics.Clear(this.BackColor);
+			e.Graphics.Clear(BackColor);
 		}
 
 		// Define modifier keys
@@ -134,7 +127,7 @@ namespace ScreenGrab
 			if (keyData == Keys.Escape)
 			{
 				// Hide the form when Esc is pressed
-				this.Hide();
+				Hide();
 				return true; // Indicate that the key press was handled
 			}
 			return base.ProcessCmdKey(ref msg, keyData);
@@ -155,11 +148,12 @@ namespace ScreenGrab
 			try
 			{
 				// Ensure form is hidden before starting selection
-				this.Visible = false; // Ensure the form remains hidden
+				Visible = false; // Ensure the form remains hidden
 
 				// Take screenshot of entire screen
-				Rectangle screenBounds = Screen.PrimaryScreen.Bounds;
-				Bitmap fullScreenshot = new Bitmap(screenBounds.Width, screenBounds.Height);
+				Rectangle screenBounds = Screen.PrimaryScreen?.Bounds
+					?? throw new InvalidOperationException("No primary screen found.");
+				Bitmap fullScreenshot = new(screenBounds.Width, screenBounds.Height);
 				using (Graphics g = Graphics.FromImage(fullScreenshot))
 				{
 					g.CopyFromScreen(screenBounds.Location, Point.Empty, screenBounds.Size);
@@ -207,40 +201,36 @@ namespace ScreenGrab
 			capturedImage?.Dispose();
 			capturedImage = bitmap;
 
-			// **IMPORTANT**: resize the client area to exactly the new image size
-			this.SuspendLayout();
-			this.FormBorderStyle = FormBorderStyle.None;
-			this.AutoScroll = false;
-			this.AutoScrollMinSize = Size.Empty;
-			this.ClientSize = new Size(capturedImage.Width, capturedImage.Height);
-			this.ResumeLayout();
+			// Suspend layout while making UI changes
+			SuspendLayout();
 
-			// Reset form completely - clear any accumulated changes
-			this.Opacity = 1.0;
-			this.WindowState = FormWindowState.Normal;
-			this.ShowInTaskbar = true;
-			this.BackColor = SystemColors.Control;
-			this.TransparencyKey = Color.Empty;
-			this.AutoScrollPosition = Point.Empty; // Reset scroll position
+			// Configure form appearance
+			FormBorderStyle = FormBorderStyle.FixedSingle;
+			ControlBox = false;
+			MinimizeBox = false;
+			MaximizeBox = false;
+
+			// Disable scrolling
+			AutoScroll = false;
+			AutoScrollMinSize = Size.Empty;
+
+			// Set exact dimensions to match the captured image
+			ClientSize = new Size(bitmap.Width, bitmap.Height);
+
+			// Reset form visual state
+			Opacity = 1.0;
+			WindowState = FormWindowState.Normal;
+			ShowInTaskbar = true;
+			BackColor = SystemColors.Control;
+			TransparencyKey = Color.Empty;
+			AutoScrollPosition = Point.Empty;
 
 			// Clear any remaining display state
 			dragStartPoint = null;
 			dragRectangle = null;
 
-			// Ensure the form's client area exactly matches the bitmap size
-			// This is critical to avoid black borders
-			this.FormBorderStyle = FormBorderStyle.FixedSingle;
-			this.ControlBox = false;
-			this.MinimizeBox = false;
-			this.MaximizeBox = false;
-			this.ClientSize = new Size(bitmap.Width, bitmap.Height);
-
-			// Disable auto scrolling to prevent extra padding that causes the border
-			this.AutoScroll = false;
-			this.AutoScrollMinSize = new Size(0, 0); // Clear auto-scroll size
-
 			// Set title with dimensions
-			this.Text = $"ScreenGrab - {bitmap.Width}x{bitmap.Height}";
+			Text = $"ScreenGrab - {bitmap.Width}x{bitmap.Height}";
 
 			// Position the form on screen
 			Screen currentScreen = Screen.FromPoint(Cursor.Position);
@@ -251,21 +241,21 @@ namespace ScreenGrab
 				Math.Min(Cursor.Position.Y - (bitmap.Height / 2),
 				currentScreen.WorkingArea.Bottom - bitmap.Height - 20));
 
-			this.Location = new Point(x, y);
+			Location = new Point(x, y);
+
+			ResumeLayout();
 
 			// Show the form and bring it to front
 			Show();
-			SetForegroundWindow(this.Handle);
-			this.Activate();
-			this.BringToFront();
-			this.Focus();
+			SetForegroundWindow(Handle);
+			Activate();
+			BringToFront();
+			Focus();
 
 			// Force a complete UI refresh
-			this.Invalidate();  // marks entire client rectangle
-			this.Update();      // synchronously repaints
+			Invalidate();
+			Update();
 		}
-
-
 
 		private Point? dragStartPoint = null;
 		private Rectangle? dragRectangle = null;
@@ -277,7 +267,7 @@ namespace ScreenGrab
 			{
 				// Use double buffering to reduce flickering
 				BufferedGraphicsContext currentContext = BufferedGraphicsManager.Current;
-				using BufferedGraphics bufferedGraphics = currentContext.Allocate(e.Graphics, this.DisplayRectangle);
+				using BufferedGraphics bufferedGraphics = currentContext.Allocate(e.Graphics, DisplayRectangle);
 
 				// Draw the image at its original size
 				bufferedGraphics.Graphics.DrawImage(capturedImage, AutoScrollPosition.X, AutoScrollPosition.Y,
@@ -318,7 +308,7 @@ namespace ScreenGrab
 				// Calculate button positions: center both buttons as a group
 				int gap = 10;
 				int groupWidth = copyButton.Width + saveButton.Width + gap;
-				int leftStart = (this.ClientSize.Width - groupWidth) / 2;
+				int leftStart = (ClientSize.Width - groupWidth) / 2;
 
 				copyButton.Visible = true;
 				saveButton.Visible = true;
@@ -372,7 +362,7 @@ namespace ScreenGrab
 
 				// Reset form state before hiding
 				ResetFormState();
-				this.Hide();
+				Hide();
 			}
 		}
 
@@ -400,7 +390,7 @@ namespace ScreenGrab
 
 				// Reset form state before hiding
 				ResetFormState();
-				this.Hide();
+				Hide();
 			}
 			catch (Exception ex)
 			{
@@ -413,8 +403,8 @@ namespace ScreenGrab
 		private void ResetFormState()
 		{
 			// Reset to initial state to prepare for next capture
-			this.FormBorderStyle = FormBorderStyle.None;
-			this.AutoScrollPosition = Point.Empty;
+			FormBorderStyle = FormBorderStyle.None;
+			AutoScrollPosition = Point.Empty;
 			dragStartPoint = null;
 			dragRectangle = null;
 		}
@@ -428,10 +418,10 @@ namespace ScreenGrab
 			if (capturedImage != null)
 			{
 				// Update the auto-scroll size to match the image dimensions
-				this.AutoScrollMinSize = new Size(capturedImage.Width, capturedImage.Height);
+				AutoScrollMinSize = new Size(capturedImage.Width, capturedImage.Height);
 
 				// Force a repaint
-				this.Invalidate();
+				Invalidate();
 			}
 		}
 
@@ -458,8 +448,8 @@ namespace ScreenGrab
 
 		protected override void OnFormClosing(FormClosingEventArgs e)
 		{
-			UnregisterHotKey(this.Handle, 100);
-			UnregisterHotKey(this.Handle, 101);
+			UnregisterHotKey(Handle, 100);
+			UnregisterHotKey(Handle, 101);
 			capturedImage?.Dispose();
 			base.OnFormClosing(e);
 		}
@@ -467,10 +457,10 @@ namespace ScreenGrab
 		private void Form1_Load(object sender, EventArgs e)
 		{
 			// Add a small delay to ensure the form handle is created
-			//this.BeginInvoke(new Action(() =>
+			//BeginInvoke(new Action(() =>
 			//{
 			//	// Try to register the hotkey with a different ID
-			//	bool isHotKeyRegistered = RegisterHotKey(this.Handle, 100, (uint)(MOD_CONTROL | MOD_ALT), (uint)Keys.F12);
+			//	bool isHotKeyRegistered = RegisterHotKey(Handle, 100, (uint)(MOD_CONTROL | MOD_ALT), (uint)Keys.F12);
 			//
 			//	// If that fails, try another key combination
 			//	if (!isHotKeyRegistered)
@@ -480,7 +470,7 @@ namespace ScreenGrab
 			//			MessageBoxButtons.OK, MessageBoxIcon.Warning);
 			//
 			//		// Try a different key combination
-			//		isHotKeyRegistered = RegisterHotKey(this.Handle, 101, (uint)(MOD_CONTROL | MOD_ALT), (uint)Keys.PrintScreen);
+			//		isHotKeyRegistered = RegisterHotKey(Handle, 101, (uint)(MOD_CONTROL | MOD_ALT), (uint)Keys.PrintScreen);
 			//
 			//		if (isHotKeyRegistered)
 			//		{
@@ -502,7 +492,7 @@ namespace ScreenGrab
 			//}));
 
 			// Add this line to enable auto-scrolling
-			this.AutoScroll = true;
+			AutoScroll = true;
 		}
 	}
 
@@ -524,27 +514,27 @@ namespace ScreenGrab
 			screenImage = screenCapture;
 
 			// Configure the form
-			this.FormBorderStyle = FormBorderStyle.None;
-			this.WindowState = FormWindowState.Maximized;
-			this.TopMost = true;
-			this.Cursor = Cursors.Cross;
-			this.DoubleBuffered = true;
-			this.BackgroundImage = screenCapture;
-			this.BackColor = Color.Black;
-			this.Opacity = 0.7;
-			this.ShowInTaskbar = false;
+			FormBorderStyle = FormBorderStyle.None;
+			WindowState = FormWindowState.Maximized;
+			TopMost = true;
+			Cursor = Cursors.Cross;
+			DoubleBuffered = true;
+			BackgroundImage = screenCapture;
+			BackColor = Color.Black;
+			Opacity = 0.7;
+			ShowInTaskbar = false;
 
 			// Set up event handlers
-			this.MouseDown += SelectionForm_MouseDown;
-			this.MouseMove += SelectionForm_MouseMove;
-			this.MouseUp += SelectionForm_MouseUp;
-			this.KeyDown += SelectionForm_KeyDown;
+			MouseDown += SelectionForm_MouseDown;
+			MouseMove += SelectionForm_MouseMove;
+			MouseUp += SelectionForm_MouseUp;
+			KeyDown += SelectionForm_KeyDown;
 
 			// Ensure the form comes up in the foreground
-			this.Load += (s, e) =>
+			Load += (s, e) =>
 			{
-				this.Activate();
-				SetForegroundWindow(this.Handle);
+				Activate();
+				SetForegroundWindow(Handle);
 			};
 		}
 
@@ -578,7 +568,7 @@ namespace ScreenGrab
 
 				// Trigger the selection complete event
 				SelectionComplete?.Invoke(this, selectionRect);
-				this.Close();
+				Close();
 			}
 		}
 
@@ -588,7 +578,7 @@ namespace ScreenGrab
 			{
 				// Cancel selection
 				SelectionComplete?.Invoke(this, Rectangle.Empty);
-				this.Close();
+				Close();
 			}
 		}
 
