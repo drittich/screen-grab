@@ -5,5 +5,5 @@ A Windows screen-grab utility created by vibe coding.
 - Ctrl-Alt-F12 to invoke
 - Drag to selected image area
 - Drag on captured image to add one or more highlight rectangles
-- Ctrl-Z to undo highlights
-- Esc to close
+- <kbd>Ctrl</kbd>-<kbd>Z</kbd>/<kbd>Ctrl</kbd>-<kbd>Y</kbd> to undo/redo highlights
+- <kbd>Esc</kbd> to close
