@@ -1,4 +1,4 @@
-A Windows screen-grab utility created by vibe coding.
+A Windows screen-capture utility created by vibe coding.
 
 ## Usage
 
