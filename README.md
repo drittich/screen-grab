@@ -1,3 +1,5 @@
+## screen-grab
+
 A Windows screen-capture utility created by vibe coding.
 
 ## Usage
