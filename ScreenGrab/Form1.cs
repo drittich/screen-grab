@@ -291,6 +291,14 @@ namespace ScreenGrab
 
 			ResumeLayout();
 
+			// Center the form on the primary screen
+			StartPosition = FormStartPosition.Manual;
+			Rectangle screenBounds = Screen.PrimaryScreen.Bounds;
+			Location = new Point(
+				screenBounds.Left + (screenBounds.Width - Width) / 2,
+				screenBounds.Top + (screenBounds.Height - Height) / 2
+			);
+
 			// Show the form and bring it to front
 			ShowInAltTab();
 			Show();
