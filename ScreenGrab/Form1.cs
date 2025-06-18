@@ -729,17 +729,17 @@ namespace ScreenGrab
 	{
 		private Point startPoint;
 		private Point currentPoint;
-		private bool isDragging = false;
-		private Bitmap screenImage;
+            private bool isDragging = false;
+            private readonly Bitmap screenImage;
 
 		public event EventHandler<Rectangle>? SelectionComplete;
 
 		[DllImport("user32.dll")]
 		private static extern bool SetForegroundWindow(IntPtr hWnd);
 
-		public SelectionForm(Bitmap screenCapture)
-		{
-			screenImage = screenCapture;
+            public SelectionForm(Bitmap screenCapture)
+            {
+                    screenImage = (Bitmap)screenCapture.Clone();
 
 			// Configure the form
 			FormBorderStyle = FormBorderStyle.None;
@@ -747,7 +747,7 @@ namespace ScreenGrab
 			TopMost = true;
 			Cursor = Cursors.Cross;
 			DoubleBuffered = true;
-			BackgroundImage = screenCapture;
+                    BackgroundImage = screenImage;
 			BackColor = Color.Black;
 			Opacity = 0.7;
 			ShowInTaskbar = false;
@@ -840,13 +840,14 @@ namespace ScreenGrab
 			return new Rectangle(x, y, width, height);
 		}
 
-		protected override void Dispose(bool disposing)
-		{
-			if (disposing)
-			{
-				screenImage?.Dispose();
-			}
-			base.Dispose(disposing);
-		}
+                protected override void Dispose(bool disposing)
+                {
+                        if (disposing)
+                        {
+                                BackgroundImage = null; // image disposed by caller
+                                screenImage.Dispose();
+                        }
+                        base.Dispose(disposing);
+                }
 	}
 }
