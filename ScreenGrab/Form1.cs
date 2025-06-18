@@ -117,10 +117,10 @@ namespace ScreenGrab
 		private static extern bool SetForegroundWindow(IntPtr hWnd);
 
 		// Re-adding missing fields
-                private Bitmap? capturedImage;
-                private Bitmap? fullScreenImage; // store initial full screen capture
-                private SelectionForm? selectionForm;
-                private NotifyIcon? trayIcon;
+		private Bitmap? capturedImage;
+		private Bitmap? fullScreenImage; // store initial full screen capture
+		private SelectionForm? selectionForm;
+		private NotifyIcon? trayIcon;
 
 		public void SetTrayIcon(NotifyIcon icon)
 		{
@@ -169,16 +169,16 @@ namespace ScreenGrab
 			{
 				Visible = false;
 
-                                Rectangle screenBounds = Screen.PrimaryScreen?.Bounds
-                                        ?? throw new InvalidOperationException("No primary screen found.");
-                                fullScreenImage?.Dispose();
-                                fullScreenImage = new Bitmap(screenBounds.Width, screenBounds.Height);
-                                using (Graphics g = Graphics.FromImage(fullScreenImage))
-                                {
-                                        g.CopyFromScreen(screenBounds.Location, Point.Empty, screenBounds.Size);
-                                }
+				Rectangle screenBounds = Screen.PrimaryScreen?.Bounds
+						?? throw new InvalidOperationException("No primary screen found.");
+				fullScreenImage?.Dispose();
+				fullScreenImage = new Bitmap(screenBounds.Width, screenBounds.Height);
+				using (Graphics g = Graphics.FromImage(fullScreenImage))
+				{
+					g.CopyFromScreen(screenBounds.Location, Point.Empty, screenBounds.Size);
+				}
 
-                                selectionForm = new SelectionForm(fullScreenImage);
+				selectionForm = new SelectionForm(fullScreenImage);
 				selectionForm.SelectionComplete += SelectionForm_SelectionComplete;
 				selectionForm.ShowDialog();
 			}
@@ -197,33 +197,33 @@ namespace ScreenGrab
 				sf.Dispose();
 				selectionForm = null;
 
-                                if (selectedRegion.Width > 0 && selectedRegion.Height > 0)
-                                {
-                                        CaptureSelectedRegion(selectedRegion);
-                                }
-                        }
-                }
+				if (selectedRegion.Width > 0 && selectedRegion.Height > 0)
+				{
+					CaptureSelectedRegion(selectedRegion);
+				}
+			}
+		}
 
-                private void CaptureSelectedRegion(Rectangle region)
-                {
-                        Bitmap bitmap = new Bitmap(region.Width, region.Height);
-                        if (fullScreenImage != null)
-                        {
-                                // Crop the selected region from the previously captured full screen image
-                                using Graphics g = Graphics.FromImage(bitmap);
-                                g.DrawImage(fullScreenImage, new Rectangle(Point.Empty, region.Size), region, GraphicsUnit.Pixel);
-                        }
-                        else
-                        {
-                                // Fallback to capturing from screen if full image is not available
-                                using Graphics g = Graphics.FromImage(bitmap);
-                                g.CopyFromScreen(region.Location, Point.Empty, region.Size);
-                        }
+		private void CaptureSelectedRegion(Rectangle region)
+		{
+			Bitmap bitmap = new Bitmap(region.Width, region.Height);
+			if (fullScreenImage != null)
+			{
+				// Crop the selected region from the previously captured full screen image
+				using Graphics g = Graphics.FromImage(bitmap);
+				g.DrawImage(fullScreenImage, new Rectangle(Point.Empty, region.Size), region, GraphicsUnit.Pixel);
+			}
+			else
+			{
+				// Fallback to capturing from screen if full image is not available
+				using Graphics g = Graphics.FromImage(bitmap);
+				g.CopyFromScreen(region.Location, Point.Empty, region.Size);
+			}
 
-                        capturedImage?.Dispose();
-                        capturedImage = bitmap;
-                        fullScreenImage?.Dispose();
-                        fullScreenImage = null;
+			capturedImage?.Dispose();
+			capturedImage = bitmap;
+			fullScreenImage?.Dispose();
+			fullScreenImage = null;
 
 			originalImage?.Dispose();
 			originalImage = new Bitmap(capturedImage);
@@ -729,17 +729,17 @@ namespace ScreenGrab
 	{
 		private Point startPoint;
 		private Point currentPoint;
-            private bool isDragging = false;
-            private readonly Bitmap screenImage;
+		private bool isDragging = false;
+		private readonly Bitmap screenImage;
 
 		public event EventHandler<Rectangle>? SelectionComplete;
 
 		[DllImport("user32.dll")]
 		private static extern bool SetForegroundWindow(IntPtr hWnd);
 
-            public SelectionForm(Bitmap screenCapture)
-            {
-                    screenImage = (Bitmap)screenCapture.Clone();
+		public SelectionForm(Bitmap screenCapture)
+		{
+			screenImage = (Bitmap)screenCapture.Clone();
 
 			// Configure the form
 			FormBorderStyle = FormBorderStyle.None;
@@ -747,7 +747,7 @@ namespace ScreenGrab
 			TopMost = true;
 			Cursor = Cursors.Cross;
 			DoubleBuffered = true;
-                    BackgroundImage = screenImage;
+			BackgroundImage = screenImage;
 			BackColor = Color.Black;
 			Opacity = 0.7;
 			ShowInTaskbar = false;
@@ -840,14 +840,14 @@ namespace ScreenGrab
 			return new Rectangle(x, y, width, height);
 		}
 
-                protected override void Dispose(bool disposing)
-                {
-                        if (disposing)
-                        {
-                                BackgroundImage = null; // image disposed by caller
-                                screenImage.Dispose();
-                        }
-                        base.Dispose(disposing);
-                }
+		protected override void Dispose(bool disposing)
+		{
+			if (disposing)
+			{
+				BackgroundImage = null; // image disposed by caller
+				screenImage.Dispose();
+			}
+			base.Dispose(disposing);
+		}
 	}
 }
