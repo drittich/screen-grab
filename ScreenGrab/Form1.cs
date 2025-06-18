@@ -63,10 +63,11 @@ namespace ScreenGrab
 			Opacity = 0;
 			ShowInTaskbar = false;
 			FormBorderStyle = FormBorderStyle.None;
-			Load += (s, e) =>
-			{
-				Hide();
-			};
+                        Load += (s, e) =>
+                        {
+                                Hide();
+                                HideFromAltTab();
+                        };
 
 			// Ensure buttons are visible when mouse enters the header panel
 			headerPanel.MouseEnter += (s, e) =>
@@ -81,12 +82,13 @@ namespace ScreenGrab
 			HandleDestroyed += Form1_HandleDestroyed;
 		}
 
-		private void Form1_HandleCreated(object? sender, EventArgs e)
-		{
-			// register both combos every time we get a handle
-			RegisterHotKey(Handle, 100, MOD_CONTROL | MOD_ALT, (uint)Keys.F12);
-			RegisterHotKey(Handle, 101, MOD_CONTROL | MOD_ALT, (uint)Keys.PrintScreen);
-		}
+                private void Form1_HandleCreated(object? sender, EventArgs e)
+                {
+                        // register both combos every time we get a handle
+                        RegisterHotKey(Handle, 100, MOD_CONTROL | MOD_ALT, (uint)Keys.F12);
+                        RegisterHotKey(Handle, 101, MOD_CONTROL | MOD_ALT, (uint)Keys.PrintScreen);
+                        HideFromAltTab();
+                }
 
 		private void Form1_HandleDestroyed(object? sender, EventArgs e)
 		{
@@ -113,8 +115,18 @@ namespace ScreenGrab
 		[DllImport("user32.dll")]
 		private static extern bool UnregisterHotKey(IntPtr hWnd, int id);
 
-		[DllImport("user32.dll")]
-		private static extern bool SetForegroundWindow(IntPtr hWnd);
+                [DllImport("user32.dll")]
+                private static extern bool SetForegroundWindow(IntPtr hWnd);
+
+                [DllImport("user32.dll")]
+                private static extern int GetWindowLong(IntPtr hWnd, int nIndex);
+
+                [DllImport("user32.dll")]
+                private static extern int SetWindowLong(IntPtr hWnd, int nIndex, int dwNewLong);
+
+                private const int GWL_EXSTYLE = -20;
+                private const int WS_EX_TOOLWINDOW = 0x00000080;
+                private const int WS_EX_APPWINDOW = 0x00040000;
 
 		// Re-adding missing fields
 		private Bitmap? capturedImage;
@@ -132,13 +144,14 @@ namespace ScreenGrab
 			StartSelectionProcess();
 		}
 
-		protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
-		{
-			if (keyData == Keys.Escape)
-			{
-				Hide();
-				return true;
-			}
+                protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
+                {
+                        if (keyData == Keys.Escape)
+                        {
+                                Hide();
+                                HideFromAltTab();
+                                return true;
+                        }
 			else if (keyData == (Keys.Control | Keys.Z) && rectangleHistory.Count > 0)
 			{
 				UndoLastRectangle();
@@ -167,7 +180,8 @@ namespace ScreenGrab
 		{
 			try
 			{
-				Visible = false;
+                                Visible = false;
+                                HideFromAltTab();
 
 				Rectangle screenBounds = Screen.PrimaryScreen?.Bounds
 						?? throw new InvalidOperationException("No primary screen found.");
@@ -272,12 +286,13 @@ namespace ScreenGrab
 
 			Location = new Point(x, y);
 
-			ResumeLayout();
+                        ResumeLayout();
 
-			// Show the form and bring it to front
-			Show();
-			SetForegroundWindow(Handle);
-			Activate();
+                        // Show the form and bring it to front
+                        ShowInAltTab();
+                        Show();
+                        SetForegroundWindow(Handle);
+                        Activate();
 			BringToFront();
 			Focus();
 
@@ -398,11 +413,13 @@ namespace ScreenGrab
 			{
 				Clipboard.SetImage(capturedImage);
 
-				// Reset form state before hiding
-				ResetFormState();
-				Hide();
-			}
-		}
+                        // Reset form state before hiding
+                        ResetFormState();
+
+                        Hide();
+                        HideFromAltTab();
+                        }
+                }
 
 		private string SaveScreenshot(bool copyPathToClipboard)
 		{
@@ -432,9 +449,10 @@ namespace ScreenGrab
 				ShowSilentNotification($"Image saved to {filePath}");
 			}
 
-			// Reset form state before hiding
-			ResetFormState();
-			Hide();
+                        // Reset form state before hiding
+                        ResetFormState();
+                        Hide();
+                        HideFromAltTab();
 
 			return filePath;
 		}
@@ -541,10 +559,10 @@ namespace ScreenGrab
 			});
 		}
 
-		private void CloseActiveNotification()
-		{
-			if (activeToastNotification != null && !activeToastNotification.IsDisposed)
-			{
+                private void CloseActiveNotification()
+                {
+                        if (activeToastNotification != null && !activeToastNotification.IsDisposed)
+                        {
 				try
 				{
 					if (activeToastNotification.InvokeRequired)
@@ -557,8 +575,24 @@ namespace ScreenGrab
 					// Form may have been disposed in another thread
 				}
 				activeToastNotification = null;
-			}
-		}
+                        }
+                }
+
+                private void HideFromAltTab()
+                {
+                        int style = GetWindowLong(Handle, GWL_EXSTYLE);
+                        style |= WS_EX_TOOLWINDOW;
+                        style &= ~WS_EX_APPWINDOW;
+                        SetWindowLong(Handle, GWL_EXSTYLE, style);
+                }
+
+                private void ShowInAltTab()
+                {
+                        int style = GetWindowLong(Handle, GWL_EXSTYLE);
+                        style &= ~WS_EX_TOOLWINDOW;
+                        style |= WS_EX_APPWINDOW;
+                        SetWindowLong(Handle, GWL_EXSTYLE, style);
+                }
 
 
 		// Add this P/Invoke for rounded corners
