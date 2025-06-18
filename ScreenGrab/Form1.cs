@@ -13,6 +13,9 @@ namespace ScreenGrab
 		private Stack<Rectangle> rectangleHistory = new Stack<Rectangle>();
 		private Stack<Rectangle> redoStack = new Stack<Rectangle>();
 
+		const int highlightThickness = 5;
+		const int highlightCornerRadius = 20;
+
 		public Form1() : base()
 		{
 			Icon = new Icon(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "icon.ico"));
@@ -63,11 +66,11 @@ namespace ScreenGrab
 			Opacity = 0;
 			ShowInTaskbar = false;
 			FormBorderStyle = FormBorderStyle.None;
-                        Load += (s, e) =>
-                        {
-                                Hide();
-                                HideFromAltTab();
-                        };
+			Load += (s, e) =>
+			{
+				Hide();
+				HideFromAltTab();
+			};
 
 			// Ensure buttons are visible when mouse enters the header panel
 			headerPanel.MouseEnter += (s, e) =>
@@ -82,13 +85,13 @@ namespace ScreenGrab
 			HandleDestroyed += Form1_HandleDestroyed;
 		}
 
-                private void Form1_HandleCreated(object? sender, EventArgs e)
-                {
-                        // register both combos every time we get a handle
-                        RegisterHotKey(Handle, 100, MOD_CONTROL | MOD_ALT, (uint)Keys.F12);
-                        RegisterHotKey(Handle, 101, MOD_CONTROL | MOD_ALT, (uint)Keys.PrintScreen);
-                        HideFromAltTab();
-                }
+		private void Form1_HandleCreated(object? sender, EventArgs e)
+		{
+			// register both combos every time we get a handle
+			RegisterHotKey(Handle, 100, MOD_CONTROL | MOD_ALT, (uint)Keys.F12);
+			RegisterHotKey(Handle, 101, MOD_CONTROL | MOD_ALT, (uint)Keys.PrintScreen);
+			HideFromAltTab();
+		}
 
 		private void Form1_HandleDestroyed(object? sender, EventArgs e)
 		{
@@ -115,18 +118,18 @@ namespace ScreenGrab
 		[DllImport("user32.dll")]
 		private static extern bool UnregisterHotKey(IntPtr hWnd, int id);
 
-                [DllImport("user32.dll")]
-                private static extern bool SetForegroundWindow(IntPtr hWnd);
+		[DllImport("user32.dll")]
+		private static extern bool SetForegroundWindow(IntPtr hWnd);
 
-                [DllImport("user32.dll")]
-                private static extern int GetWindowLong(IntPtr hWnd, int nIndex);
+		[DllImport("user32.dll")]
+		private static extern int GetWindowLong(IntPtr hWnd, int nIndex);
 
-                [DllImport("user32.dll")]
-                private static extern int SetWindowLong(IntPtr hWnd, int nIndex, int dwNewLong);
+		[DllImport("user32.dll")]
+		private static extern int SetWindowLong(IntPtr hWnd, int nIndex, int dwNewLong);
 
-                private const int GWL_EXSTYLE = -20;
-                private const int WS_EX_TOOLWINDOW = 0x00000080;
-                private const int WS_EX_APPWINDOW = 0x00040000;
+		private const int GWL_EXSTYLE = -20;
+		private const int WS_EX_TOOLWINDOW = 0x00000080;
+		private const int WS_EX_APPWINDOW = 0x00040000;
 
 		// Re-adding missing fields
 		private Bitmap? capturedImage;
@@ -144,14 +147,14 @@ namespace ScreenGrab
 			StartSelectionProcess();
 		}
 
-                protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
-                {
-                        if (keyData == Keys.Escape)
-                        {
-                                Hide();
-                                HideFromAltTab();
-                                return true;
-                        }
+		protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
+		{
+			if (keyData == Keys.Escape)
+			{
+				Hide();
+				HideFromAltTab();
+				return true;
+			}
 			else if (keyData == (Keys.Control | Keys.Z) && rectangleHistory.Count > 0)
 			{
 				UndoLastRectangle();
@@ -180,8 +183,8 @@ namespace ScreenGrab
 		{
 			try
 			{
-                                Visible = false;
-                                HideFromAltTab();
+				Visible = false;
+				HideFromAltTab();
 
 				Rectangle screenBounds = Screen.PrimaryScreen?.Bounds
 						?? throw new InvalidOperationException("No primary screen found.");
@@ -286,13 +289,13 @@ namespace ScreenGrab
 
 			Location = new Point(x, y);
 
-                        ResumeLayout();
+			ResumeLayout();
 
-                        // Show the form and bring it to front
-                        ShowInAltTab();
-                        Show();
-                        SetForegroundWindow(Handle);
-                        Activate();
+			// Show the form and bring it to front
+			ShowInAltTab();
+			Show();
+			SetForegroundWindow(Handle);
+			Activate();
 			BringToFront();
 			Focus();
 
@@ -413,13 +416,13 @@ namespace ScreenGrab
 			{
 				Clipboard.SetImage(capturedImage);
 
-                        // Reset form state before hiding
-                        ResetFormState();
+				// Reset form state before hiding
+				ResetFormState();
 
-                        Hide();
-                        HideFromAltTab();
-                        }
-                }
+				Hide();
+				HideFromAltTab();
+			}
+		}
 
 		private string SaveScreenshot(bool copyPathToClipboard)
 		{
@@ -449,10 +452,10 @@ namespace ScreenGrab
 				ShowSilentNotification($"Image saved to {filePath}");
 			}
 
-                        // Reset form state before hiding
-                        ResetFormState();
-                        Hide();
-                        HideFromAltTab();
+			// Reset form state before hiding
+			ResetFormState();
+			Hide();
+			HideFromAltTab();
 
 			return filePath;
 		}
@@ -559,10 +562,10 @@ namespace ScreenGrab
 			});
 		}
 
-                private void CloseActiveNotification()
-                {
-                        if (activeToastNotification != null && !activeToastNotification.IsDisposed)
-                        {
+		private void CloseActiveNotification()
+		{
+			if (activeToastNotification != null && !activeToastNotification.IsDisposed)
+			{
 				try
 				{
 					if (activeToastNotification.InvokeRequired)
@@ -575,24 +578,24 @@ namespace ScreenGrab
 					// Form may have been disposed in another thread
 				}
 				activeToastNotification = null;
-                        }
-                }
+			}
+		}
 
-                private void HideFromAltTab()
-                {
-                        int style = GetWindowLong(Handle, GWL_EXSTYLE);
-                        style |= WS_EX_TOOLWINDOW;
-                        style &= ~WS_EX_APPWINDOW;
-                        SetWindowLong(Handle, GWL_EXSTYLE, style);
-                }
+		private void HideFromAltTab()
+		{
+			int style = GetWindowLong(Handle, GWL_EXSTYLE);
+			style |= WS_EX_TOOLWINDOW;
+			style &= ~WS_EX_APPWINDOW;
+			SetWindowLong(Handle, GWL_EXSTYLE, style);
+		}
 
-                private void ShowInAltTab()
-                {
-                        int style = GetWindowLong(Handle, GWL_EXSTYLE);
-                        style &= ~WS_EX_TOOLWINDOW;
-                        style |= WS_EX_APPWINDOW;
-                        SetWindowLong(Handle, GWL_EXSTYLE, style);
-                }
+		private void ShowInAltTab()
+		{
+			int style = GetWindowLong(Handle, GWL_EXSTYLE);
+			style &= ~WS_EX_TOOLWINDOW;
+			style |= WS_EX_APPWINDOW;
+			SetWindowLong(Handle, GWL_EXSTYLE, style);
+		}
 
 
 		// Add this P/Invoke for rounded corners
@@ -652,8 +655,8 @@ namespace ScreenGrab
 
 			// Draw the rectangle on the image
 			using Graphics g = Graphics.FromImage(capturedImage);
-			using Pen redPen = new Pen(Color.Red, 5);
-			DrawRoundedRectangle(g, redPen, selection, 10); // Add rounded corners with a radius of 10
+			using Pen redPen = new Pen(Color.Red, highlightThickness);
+			DrawRoundedRectangle(g, redPen, selection, highlightCornerRadius); // Add rounded corners with a radius of 10
 			Invalidate(); // Trigger repaint to show the updated image
 		}
 
@@ -680,8 +683,8 @@ namespace ScreenGrab
 
 			// Draw this rectangle on the image
 			using Graphics g = Graphics.FromImage(capturedImage);
-			using Pen redPen = new Pen(Color.Red, 5);
-			DrawRoundedRectangle(g, redPen, redoRect, 10);
+			using Pen redPen = new Pen(Color.Red, highlightThickness);
+			DrawRoundedRectangle(g, redPen, redoRect, highlightCornerRadius);
 
 			Invalidate(); // Refresh display
 		}
@@ -706,12 +709,12 @@ namespace ScreenGrab
 			// Redraw all rectangles in history
 			using (Graphics g = Graphics.FromImage(capturedImage))
 			{
-				using Pen redPen = new Pen(Color.Red, 5);
+				using Pen redPen = new Pen(Color.Red, highlightThickness);
 				// Create a temporary copy of the history to preserve order
 				Rectangle[] tempHistory = rectangleHistory.Reverse().ToArray();
 				foreach (Rectangle rect in tempHistory)
 				{
-					DrawRoundedRectangle(g, redPen, rect, 10);
+					DrawRoundedRectangle(g, redPen, rect, highlightCornerRadius);
 				}
 			}
 
