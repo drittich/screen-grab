@@ -5,67 +5,67 @@ namespace ScreenGrab
 {
 	public partial class Form1 : Form
 	{
-               private Panel headerPanel;
-               private Button copyButton;
-               private Button saveButton;
-               private Button saveAndCopyPathButton;
-               private readonly bool isHighDpi;
-               private readonly float scaleFactor;
+		private Panel headerPanel;
+		private Button copyButton;
+		private Button saveButton;
+		private Button saveAndCopyPathButton;
+		private readonly bool isHighDpi;
+		private readonly float scaleFactor;
 
 		private Stack<Rectangle> rectangleHistory = new Stack<Rectangle>();
 		private Stack<Rectangle> redoStack = new Stack<Rectangle>();
 
-               private readonly int highlightThickness;
-               const int highlightCornerRadius = 20;
+		private readonly int highlightThickness;
+		const int highlightCornerRadius = 20;
 
-               public Form1() : base()
-               {
-                       Icon = new Icon(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "icon.ico"));
+		public Form1() : base()
+		{
+			Icon = new Icon(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "icon.ico"));
 
-                       scaleFactor = DeviceDpi / 96f;
-                       isHighDpi = scaleFactor > 1f;
-                       highlightThickness = isHighDpi ? 5 : 2;
+			scaleFactor = DeviceDpi / 96f;
+			isHighDpi = scaleFactor > 1f;
+			highlightThickness = isHighDpi ? 5 : 2;
 
-                       SetStyle(
-                               ControlStyles.ResizeRedraw
-                         | ControlStyles.AllPaintingInWmPaint
-                         | ControlStyles.UserPaint
-                       , true);
-                       DoubleBuffered = true;
+			SetStyle(
+					ControlStyles.ResizeRedraw
+			  | ControlStyles.AllPaintingInWmPaint
+			  | ControlStyles.UserPaint
+			, true);
+			DoubleBuffered = true;
 
-                       int headerHeight = isHighDpi ? 60 : 70;
-                       int buttonWidth = isHighDpi ? 90 : 110;
-                       int buttonHeight = isHighDpi ? 40 : 50;
+			int headerHeight = isHighDpi ? 60 : 70;
+			int buttonWidth = isHighDpi ? 90 : 110;
+			int buttonHeight = isHighDpi ? 40 : 50;
 
-                       headerPanel = new Panel
-                       {
-                               Dock = DockStyle.Top,
-                               Height = headerHeight,
-                               BackColor = SystemColors.ControlLight
-                       };
+			headerPanel = new Panel
+			{
+				Dock = DockStyle.Top,
+				Height = headerHeight,
+				BackColor = SystemColors.ControlLight
+			};
 
-                       copyButton = new Button
-                       {
-                               Text = "Copy",
-                               Size = new Size(buttonWidth, buttonHeight),
-                               Location = new Point(10, (headerHeight - buttonHeight) / 2)
-                       };
-                       copyButton.Click += CopyButton_Click;
+			copyButton = new Button
+			{
+				Text = "Copy",
+				Size = new Size(buttonWidth, buttonHeight),
+				Location = new Point(10, (headerHeight - buttonHeight) / 2)
+			};
+			copyButton.Click += CopyButton_Click;
 
-                       saveButton = new Button
-                       {
-                               Text = "Save",
-                               Size = new Size(buttonWidth, buttonHeight),
-                               Location = new Point(100, (headerHeight - buttonHeight) / 2)
-                       };
-                       saveButton.Click += SaveButton_Click;
+			saveButton = new Button
+			{
+				Text = "Save",
+				Size = new Size(buttonWidth, buttonHeight),
+				Location = new Point(100, (headerHeight - buttonHeight) / 2)
+			};
+			saveButton.Click += SaveButton_Click;
 
-                       saveAndCopyPathButton = new Button
-                       {
-                               Text = "Save (copy path)",
-                               Size = new Size(isHighDpi ? 240 : 260, buttonHeight),
-                               Location = new Point(200, (headerHeight - buttonHeight) / 2)
-                       };
+			saveAndCopyPathButton = new Button
+			{
+				Text = "Save (copy path)",
+				Size = new Size(isHighDpi ? 240 : 260, buttonHeight),
+				Location = new Point(200, (headerHeight - buttonHeight) / 2)
+			};
 			saveAndCopyPathButton.Click += SaveAndCopyPathButton_Click;
 
 			headerPanel.Controls.Add(copyButton);
@@ -372,11 +372,11 @@ namespace ScreenGrab
 		{
 			if (capturedImage != null && !dragStartPoint.HasValue)
 			{
-                               // Calculate button positions: center all buttons as a group
-                               int gap = 10;
-                               int groupWidth = copyButton.Width + saveButton.Width + saveAndCopyPathButton.Width + (gap * 2);
-                               int leftStart = (ClientSize.Width - groupWidth) / 2;
-                               int top = (headerPanel.Height - copyButton.Height) / 2;
+				// Calculate button positions: center all buttons as a group
+				int gap = 10;
+				int groupWidth = copyButton.Width + saveButton.Width + saveAndCopyPathButton.Width + (gap * 2);
+				int leftStart = (ClientSize.Width - groupWidth) / 2;
+				int top = (headerPanel.Height - copyButton.Height) / 2;
 
 				copyButton.Visible = true;
 				saveButton.Visible = true;
@@ -385,9 +385,9 @@ namespace ScreenGrab
 				saveButton.BringToFront();
 				saveAndCopyPathButton.BringToFront();
 
-                               copyButton.Location = new Point(leftStart, top);
-                               saveButton.Location = new Point(leftStart + copyButton.Width + gap, top);
-                               saveAndCopyPathButton.Location = new Point(leftStart + copyButton.Width + saveButton.Width + (gap * 2), top);
+				copyButton.Location = new Point(leftStart, top);
+				saveButton.Location = new Point(leftStart + copyButton.Width + gap, top);
+				saveAndCopyPathButton.Location = new Point(leftStart + copyButton.Width + saveButton.Width + (gap * 2), top);
 			}
 
 			if (e.Button == MouseButtons.Left && dragStartPoint.HasValue)
