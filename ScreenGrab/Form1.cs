@@ -756,6 +756,9 @@ namespace ScreenGrab
 
 		private void DrawRoundedRectangle(Graphics g, Pen pen, Rectangle rect, int cornerRadius)
 		{
+			SmoothingMode original = g.SmoothingMode;
+			g.SmoothingMode = SmoothingMode.AntiAlias;
+
 			using GraphicsPath path = new GraphicsPath();
 			path.AddArc(rect.X, rect.Y, cornerRadius, cornerRadius, 180, 90);
 			path.AddArc(rect.Right - cornerRadius, rect.Y, cornerRadius, cornerRadius, 270, 90);
@@ -763,6 +766,8 @@ namespace ScreenGrab
 			path.AddArc(rect.X, rect.Bottom - cornerRadius, cornerRadius, cornerRadius, 90, 90);
 			path.CloseFigure();
 			g.DrawPath(pen, path);
+
+			g.SmoothingMode = original;
 		}
 
 		protected override void OnFormClosing(FormClosingEventArgs e)
