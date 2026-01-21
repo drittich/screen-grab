@@ -440,7 +440,9 @@ namespace ScreenGrab
 				return string.Empty;
 			}
 
-			string downloadsPath = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile) + @"\Downloads";
+			string targetDir = @"Downloads\ScreenGrab";
+			string downloadsPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), targetDir);
+			Directory.CreateDirectory(downloadsPath);
 			string timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss");
 			string filePath = Path.Combine(downloadsPath, $"Screenshot_{timestamp}.png");
 
