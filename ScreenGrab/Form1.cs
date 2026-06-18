@@ -9,52 +9,62 @@ namespace ScreenGrab
 		private Button copyButton;
 		private Button saveButton;
 		private Button saveAndCopyPathButton;
+		private readonly bool isHighDpi;
+		private readonly float scaleFactor;
 
 		private Stack<Rectangle> rectangleHistory = new Stack<Rectangle>();
 		private Stack<Rectangle> redoStack = new Stack<Rectangle>();
 
-		const int highlightThickness = 5;
+		private readonly int highlightThickness;
 		const int highlightCornerRadius = 20;
 
 		public Form1() : base()
 		{
 			Icon = new Icon(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "icon.ico"));
 
+			scaleFactor = DeviceDpi / 96f;
+			isHighDpi = scaleFactor > 1f;
+			highlightThickness = isHighDpi ? 5 : 2;
+
 			SetStyle(
-				ControlStyles.ResizeRedraw
+					ControlStyles.ResizeRedraw
 			  | ControlStyles.AllPaintingInWmPaint
 			  | ControlStyles.UserPaint
 			, true);
 			DoubleBuffered = true;
 
+			int headerHeight = isHighDpi ? 60 : 70;
+			int buttonWidth = isHighDpi ? 90 : 110;
+			int buttonHeight = isHighDpi ? 40 : 50;
+
 			headerPanel = new Panel
 			{
 				Dock = DockStyle.Top,
-				Height = 60,
+				Height = headerHeight,
 				BackColor = SystemColors.ControlLight
 			};
 
 			copyButton = new Button
 			{
 				Text = "Copy",
-				Size = new Size(90, 40),
-				Location = new Point(10, 15)
+				Size = new Size(buttonWidth, buttonHeight),
+				Location = new Point(10, (headerHeight - buttonHeight) / 2)
 			};
 			copyButton.Click += CopyButton_Click;
 
 			saveButton = new Button
 			{
 				Text = "Save",
-				Size = new Size(90, 40),
-				Location = new Point(100, 15)
+				Size = new Size(buttonWidth, buttonHeight),
+				Location = new Point(100, (headerHeight - buttonHeight) / 2)
 			};
 			saveButton.Click += SaveButton_Click;
 
 			saveAndCopyPathButton = new Button
 			{
 				Text = "Save (copy path)",
-				Size = new Size(240, 40),
-				Location = new Point(200, 15)
+				Size = new Size(isHighDpi ? 240 : 260, buttonHeight),
+				Location = new Point(200, (headerHeight - buttonHeight) / 2)
 			};
 			saveAndCopyPathButton.Click += SaveAndCopyPathButton_Click;
 
@@ -366,6 +376,7 @@ namespace ScreenGrab
 				int gap = 10;
 				int groupWidth = copyButton.Width + saveButton.Width + saveAndCopyPathButton.Width + (gap * 2);
 				int leftStart = (ClientSize.Width - groupWidth) / 2;
+				int top = (headerPanel.Height - copyButton.Height) / 2;
 
 				copyButton.Visible = true;
 				saveButton.Visible = true;
@@ -374,9 +385,9 @@ namespace ScreenGrab
 				saveButton.BringToFront();
 				saveAndCopyPathButton.BringToFront();
 
-				copyButton.Location = new Point(leftStart, 10);
-				saveButton.Location = new Point(leftStart + copyButton.Width + gap, 10);
-				saveAndCopyPathButton.Location = new Point(leftStart + copyButton.Width + saveButton.Width + (gap * 2), 10);
+				copyButton.Location = new Point(leftStart, top);
+				saveButton.Location = new Point(leftStart + copyButton.Width + gap, top);
+				saveAndCopyPathButton.Location = new Point(leftStart + copyButton.Width + saveButton.Width + (gap * 2), top);
 			}
 
 			if (e.Button == MouseButtons.Left && dragStartPoint.HasValue)
@@ -747,6 +758,9 @@ namespace ScreenGrab
 
 		private void DrawRoundedRectangle(Graphics g, Pen pen, Rectangle rect, int cornerRadius)
 		{
+			SmoothingMode original = g.SmoothingMode;
+			g.SmoothingMode = SmoothingMode.AntiAlias;
+
 			using GraphicsPath path = new GraphicsPath();
 			path.AddArc(rect.X, rect.Y, cornerRadius, cornerRadius, 180, 90);
 			path.AddArc(rect.Right - cornerRadius, rect.Y, cornerRadius, cornerRadius, 270, 90);
@@ -754,6 +768,8 @@ namespace ScreenGrab
 			path.AddArc(rect.X, rect.Bottom - cornerRadius, cornerRadius, cornerRadius, 90, 90);
 			path.CloseFigure();
 			g.DrawPath(pen, path);
+
+			g.SmoothingMode = original;
 		}
 
 		protected override void OnFormClosing(FormClosingEventArgs e)
