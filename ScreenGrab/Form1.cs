@@ -12,13 +12,51 @@ namespace ScreenGrab
 		private readonly bool isHighDpi;
 		private readonly float scaleFactor;
 
-		// Unified annotation history for both rectangles and text
+		// Annotations are the drawable items; operations are the undoable steps that produce them.
 		private interface IAnnotation { }
 		private record RectAnnotation(Rectangle Rect) : IAnnotation;
 		private record TextAnnotation(Point Location, string Text, float FontSize) : IAnnotation;
 
-		private Stack<IAnnotation> _history = new Stack<IAnnotation>();
-		private Stack<IAnnotation> _redoStack = new Stack<IAnnotation>();
+		// Operation history. Replaying all operations oldest->newest yields the live annotation
+		// set. This keeps the stack append-only so undo/redo of edits is predictable.
+		private interface IOperation { }
+		private record AddRectOp(RectAnnotation Annotation) : IOperation;
+		private record AddTextOp(TextAnnotation Annotation) : IOperation;
+		private record EditTextOp(TextAnnotation Old, TextAnnotation New) : IOperation;
+		private record DeleteTextOp(TextAnnotation Target) : IOperation;
+
+		private Stack<IOperation> _history = new Stack<IOperation>();
+		private Stack<IOperation> _redoStack = new Stack<IOperation>();
+
+		// Projects the operation history into the ordered set of currently-live annotations.
+		private List<IAnnotation> ProjectAnnotations()
+		{
+			var live = new List<IAnnotation>();
+			// _history enumerates newest-first, so reverse to replay oldest-first.
+			foreach (IOperation op in _history.Reverse())
+			{
+				switch (op)
+				{
+					case AddRectOp ar:
+						live.Add(ar.Annotation);
+						break;
+					case AddTextOp at:
+						live.Add(at.Annotation);
+						break;
+					case EditTextOp et:
+						int idx = live.IndexOf(et.Old);
+						if (idx >= 0)
+							live[idx] = et.New;       // replace in place, preserving draw order
+						else
+							live.Add(et.New);          // defensive: original missing, just add
+						break;
+					case DeleteTextOp dt:
+						live.Remove(dt.Target);
+						break;
+				}
+			}
+			return live;
+		}
 
 		private readonly int highlightThickness;
 		const int highlightCornerRadius = 20;
@@ -34,6 +72,9 @@ namespace ScreenGrab
 		private TextBox? _activeTextBox = null;
 		private Point _textBoxImageOrigin;   // image-relative top-left when committed
 		private float _activeTextFontSize;
+		// When re-editing an existing annotation, the original is held here so commit records
+		// an EditTextOp (old -> new) rather than an AddTextOp. Null for a brand-new annotation.
+		private TextAnnotation? _editingOriginal = null;
 
 		// Text box drag state
 		private Point? _tbDragMouseDown = null;   // screen point where the drag began
@@ -310,6 +351,7 @@ namespace ScreenGrab
 			// Clear undo/redo stacks
 			_history.Clear();
 			_redoStack.Clear();
+			_editingOriginal = null;
 
 
 			// Set title with dimensions
@@ -475,15 +517,57 @@ namespace ScreenGrab
 			dragStartPoint = null;
 			dragRectangle = null;
 
-			StartTextBox(new Point(imgX, imgY));
+			Point imagePoint = new Point(imgX, imgY);
+
+			// If the click lands on an existing text annotation, re-open it for editing.
+			TextAnnotation? hit = FindTextAnnotationAt(imagePoint);
+			if (hit != null)
+			{
+				EditExistingTextAnnotation(hit);
+				return;
+			}
+
+			StartTextBox(imagePoint);
 		}
 
-		private void StartTextBox(Point imageOrigin)
+		// Returns the topmost (last-drawn) live text annotation whose box contains the point.
+		private TextAnnotation? FindTextAnnotationAt(Point imagePoint)
+		{
+			List<IAnnotation> live = ProjectAnnotations();
+			// Iterate in reverse so the topmost (most recently drawn) wins on overlap.
+			for (int i = live.Count - 1; i >= 0; i--)
+			{
+				if (live[i] is TextAnnotation t)
+				{
+					Rectangle bounds = GetTextAnnotationBounds(t);
+					if (!bounds.IsEmpty && bounds.Contains(imagePoint))
+						return t;
+				}
+			}
+			return null;
+		}
+
+		// Opens an editor seeded from an existing annotation. History is NOT mutated here; the
+		// original is hidden from the canvas while editing and the change is recorded as a single
+		// EditTextOp on commit (or discarded on cancel), keeping undo/redo clean.
+		private void EditExistingTextAnnotation(TextAnnotation annotation)
+		{
+			_editingOriginal = annotation;
+
+			// Temporarily repaint the canvas without the annotation being edited so the live
+			// text box isn't drawn over a stale burned-in copy.
+			RedrawImageExcluding(annotation);
+
+			// Re-open an editor pre-populated from the annotation.
+			StartTextBox(annotation.Location, annotation.Text, annotation.FontSize);
+		}
+
+		private void StartTextBox(Point imageOrigin, string? seedText = null, float? seedFontSize = null)
 		{
 			if (capturedImage == null) return;
 
 			_textBoxImageOrigin = imageOrigin;
-			_activeTextFontSize = DefaultFontSize * scaleFactor;
+			_activeTextFontSize = seedFontSize ?? DefaultFontSize * scaleFactor;
 
 			// TextBox left edge is imageOrigin.X, top edge is imageOrigin.Y + headerPanel.Height (form coords)
 			int formX = imageOrigin.X;
@@ -505,6 +589,7 @@ namespace ScreenGrab
 				Width = initialWidth,
 				Height = (int)(_activeTextFontSize + TextPadding * 2),
 				Padding = new Padding(TextPadding),
+				Text = seedText ?? string.Empty,
 			};
 
 			tb.TextChanged += TextBox_TextChanged;
@@ -519,6 +604,8 @@ namespace ScreenGrab
 			Controls.Add(tb);
 			tb.BringToFront();
 			tb.Focus();
+			// Place caret at end of any seeded text.
+			tb.SelectionStart = tb.TextLength;
 			ResizeTextBox();
 
 			// Hide buttons while text box is active
@@ -682,15 +769,45 @@ namespace ScreenGrab
 
 			var tb = _activeTextBox;
 			_activeTextBox = null; // clear first to prevent Leave re-entry
+			TextAnnotation? original = _editingOriginal;
+			_editingOriginal = null;
 
 			string text = tb.Text.Trim();
-			if (text.Length > 0 && capturedImage != null)
+
+			if (capturedImage != null)
 			{
-				var annotation = new TextAnnotation(_textBoxImageOrigin, tb.Text, _activeTextFontSize);
-				_history.Push(annotation);
-				_redoStack.Clear();
-				DrawTextAnnotationOnBitmap(annotation);
-				Invalidate();
+				if (original != null)
+				{
+					// Editing an existing annotation.
+					if (text.Length == 0)
+					{
+						// Cleared -> delete the original.
+						_history.Push(new DeleteTextOp(original));
+						_redoStack.Clear();
+						RedrawImage();
+					}
+					else
+					{
+						var edited = new TextAnnotation(_textBoxImageOrigin, tb.Text, _activeTextFontSize);
+						// Only record a change if something actually differs.
+						if (edited != original)
+						{
+							_history.Push(new EditTextOp(original, edited));
+							_redoStack.Clear();
+						}
+						// Repaint either way: the canvas was drawn excluding the original.
+						RedrawImage();
+					}
+				}
+				else if (text.Length > 0)
+				{
+					// Brand-new annotation.
+					var annotation = new TextAnnotation(_textBoxImageOrigin, tb.Text, _activeTextFontSize);
+					_history.Push(new AddTextOp(annotation));
+					_redoStack.Clear();
+					DrawTextAnnotationOnBitmap(annotation);
+					Invalidate();
+				}
 			}
 
 			RemoveTextBox(tb);
@@ -701,7 +818,13 @@ namespace ScreenGrab
 			if (_activeTextBox == null) return;
 			var tb = _activeTextBox;
 			_activeTextBox = null;
+			bool wasEditing = _editingOriginal != null;
+			_editingOriginal = null;
 			RemoveTextBox(tb);
+
+			// If we were editing, the canvas had the original excluded; restore it.
+			if (wasEditing)
+				RedrawImage();
 		}
 
 		private void RemoveTextBox(TextBox tb)
@@ -726,13 +849,15 @@ namespace ScreenGrab
 			Focus();
 		}
 
-		private void DrawTextAnnotationOnBitmap(TextAnnotation annotation)
+		// Computes the rendered background rectangle (image coordinates) for a text annotation.
+		// Used for both drawing and hit-testing so they stay in sync.
+		private Rectangle GetTextAnnotationBounds(TextAnnotation annotation)
 		{
-			if (capturedImage == null) return;
+			if (capturedImage == null) return Rectangle.Empty;
 
 			using Font font = new Font("Segoe UI", annotation.FontSize, GraphicsUnit.Pixel);
 			int maxWidth = capturedImage.Width - annotation.Location.X;
-			if (maxWidth < 1) return;
+			if (maxWidth < 1) return Rectangle.Empty;
 
 			// Auto-size to content width, capped at the available width (wraps only if needed).
 			// Mirrors ResizeTextBox -- same flags as the wrap/draw step so widths agree and a
@@ -757,11 +882,21 @@ namespace ScreenGrab
 			// Clamp to image bounds
 			boxHeight = Math.Min(boxHeight, capturedImage.Height - annotation.Location.Y);
 
-			Rectangle bgRect = new Rectangle(annotation.Location.X, annotation.Location.Y, boxWidth, boxHeight);
+			return new Rectangle(annotation.Location.X, annotation.Location.Y, boxWidth, boxHeight);
+		}
+
+		private void DrawTextAnnotationOnBitmap(TextAnnotation annotation)
+		{
+			if (capturedImage == null) return;
+
+			Rectangle bgRect = GetTextAnnotationBounds(annotation);
+			if (bgRect.IsEmpty) return;
+
 			Rectangle textRect = new Rectangle(
 				bgRect.X + TextPadding, bgRect.Y + TextPadding,
-				boxWidth - TextPadding * 2, boxHeight - TextPadding * 2);
+				bgRect.Width - TextPadding * 2, bgRect.Height - TextPadding * 2);
 
+			using Font font = new Font("Segoe UI", annotation.FontSize, GraphicsUnit.Pixel);
 			using Graphics g = Graphics.FromImage(capturedImage);
 			using SolidBrush bgBrush = new SolidBrush(TextBgColor);
 			g.FillRectangle(bgBrush, bgRect);
@@ -979,6 +1114,7 @@ namespace ScreenGrab
 				_activeTextBox = null;
 				RemoveTextBox(tb);
 			}
+			_editingOriginal = null;
 
 			// Reset to initial state to prepare for next capture
 			FormBorderStyle = FormBorderStyle.None;
@@ -1017,9 +1153,9 @@ namespace ScreenGrab
 		{
 			if (capturedImage == null) return;
 
-			// Add to unified history
-			_history.Push(new RectAnnotation(selection));
-			// Clear redo stack when a new annotation is added
+			// Record an add-rectangle operation
+			_history.Push(new AddRectOp(new RectAnnotation(selection)));
+			// Adding a new operation invalidates the redo history
 			_redoStack.Clear();
 
 			// Draw the rectangle on the image
@@ -1033,8 +1169,9 @@ namespace ScreenGrab
 		{
 			if (capturedImage == null || _history.Count == 0) return;
 
-			IAnnotation last = _history.Pop();
+			IOperation last = _history.Pop();
 			_redoStack.Push(last);
+			// Edits replace in place, so re-project and redraw the whole image.
 			RedrawImage();
 		}
 
@@ -1042,24 +1179,19 @@ namespace ScreenGrab
 		{
 			if (capturedImage == null || _redoStack.Count == 0) return;
 
-			IAnnotation annotation = _redoStack.Pop();
-			_history.Push(annotation);
-
-			if (annotation is RectAnnotation r)
-			{
-				using Graphics g = Graphics.FromImage(capturedImage);
-				using Pen redPen = new Pen(Color.Red, highlightThickness);
-				DrawRoundedRectangle(g, redPen, r.Rect, highlightCornerRadius);
-			}
-			else if (annotation is TextAnnotation t)
-			{
-				DrawTextAnnotationOnBitmap(t);
-			}
-
-			Invalidate();
+			IOperation op = _redoStack.Pop();
+			_history.Push(op);
+			// Re-project and redraw so edit operations are applied correctly.
+			RedrawImage();
 		}
 
-		private void RedrawImage()
+		private void RedrawImage() => RedrawImageCore(null);
+
+		// Repaints the canvas with the live annotation set, optionally skipping one annotation
+		// (used while re-editing so the editor isn't drawn over a stale burned-in copy).
+		private void RedrawImageExcluding(IAnnotation exclude) => RedrawImageCore(exclude);
+
+		private void RedrawImageCore(IAnnotation? exclude)
 		{
 			if (capturedImage == null) return;
 
@@ -1076,12 +1208,14 @@ namespace ScreenGrab
 				g.DrawImage(originalImage!, 0, 0);
 			}
 
-			// Redraw all annotations in history order (oldest first)
+			// Redraw the projected (live) annotation set in draw order
 			using (Graphics g = Graphics.FromImage(capturedImage))
 			{
 				using Pen redPen = new Pen(Color.Red, highlightThickness);
-				foreach (IAnnotation annotation in _history.Reverse())
+				foreach (IAnnotation annotation in ProjectAnnotations())
 				{
+					if (exclude != null && ReferenceEquals(annotation, exclude))
+						continue;
 					if (annotation is RectAnnotation r)
 						DrawRoundedRectangle(g, redPen, r.Rect, highlightCornerRadius);
 					else if (annotation is TextAnnotation t)
