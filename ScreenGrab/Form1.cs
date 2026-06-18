@@ -12,11 +12,32 @@ namespace ScreenGrab
 		private readonly bool isHighDpi;
 		private readonly float scaleFactor;
 
-		private Stack<Rectangle> rectangleHistory = new Stack<Rectangle>();
-		private Stack<Rectangle> redoStack = new Stack<Rectangle>();
+		// Unified annotation history for both rectangles and text
+		private interface IAnnotation { }
+		private record RectAnnotation(Rectangle Rect) : IAnnotation;
+		private record TextAnnotation(Point Location, string Text, float FontSize) : IAnnotation;
+
+		private Stack<IAnnotation> _history = new Stack<IAnnotation>();
+		private Stack<IAnnotation> _redoStack = new Stack<IAnnotation>();
 
 		private readonly int highlightThickness;
 		const int highlightCornerRadius = 20;
+
+		// Text annotation constants
+		private const int TextPadding = 4;
+		private static readonly Color TextBgColor = Color.FromArgb(0x15, 0x65, 0xC0);
+		private const float DefaultFontSize = 16f;
+		private const float MinFontSize = 8f;
+		private const float MaxFontSize = 72f;
+
+		// Active text box state
+		private TextBox? _activeTextBox = null;
+		private Point _textBoxImageOrigin;   // image-relative top-left when committed
+		private float _activeTextFontSize;
+
+		// Text box drag state
+		private Point? _tbDragStart = null;
+		private bool _tbDragging = false;
 
 		public Form1() : base()
 		{
@@ -161,18 +182,23 @@ namespace ScreenGrab
 		{
 			if (keyData == Keys.Escape)
 			{
+				if (_activeTextBox != null)
+				{
+					CancelText();
+					return true;
+				}
 				Hide();
 				HideFromAltTab();
 				return true;
 			}
-			else if (keyData == (Keys.Control | Keys.Z) && rectangleHistory.Count > 0)
+			else if (keyData == (Keys.Control | Keys.Z) && _history.Count > 0 && _activeTextBox == null)
 			{
-				UndoLastRectangle();
+				UndoLastAnnotation();
 				return true;
 			}
-			else if (keyData == (Keys.Control | Keys.Y) && redoStack.Count > 0)
+			else if (keyData == (Keys.Control | Keys.Y) && _redoStack.Count > 0 && _activeTextBox == null)
 			{
-				RedoRectangle();
+				RedoAnnotation();
 				return true;
 			}
 			return base.ProcessCmdKey(ref msg, keyData);
@@ -281,8 +307,8 @@ namespace ScreenGrab
 			dragRectangle = null;
 
 			// Clear undo/redo stacks
-			rectangleHistory.Clear();
-			redoStack.Clear();
+			_history.Clear();
+			_redoStack.Clear();
 
 
 			// Set title with dimensions
@@ -360,7 +386,7 @@ namespace ScreenGrab
 				return; // Allow the event to propagate to the button
 			}
 
-			if (e.Button == MouseButtons.Left)
+			if (e.Button == MouseButtons.Left && _activeTextBox == null)
 			{
 				dragStartPoint = new Point(e.X, e.Y - headerPanel.Height);
 				dragRectangle = null;
@@ -370,7 +396,7 @@ namespace ScreenGrab
 
 		protected override void OnMouseMove(MouseEventArgs e)
 		{
-			if (capturedImage != null && !dragStartPoint.HasValue)
+			if (capturedImage != null && !dragStartPoint.HasValue && _activeTextBox == null)
 			{
 				// Calculate button positions: center all buttons as a group
 				int gap = 10;
@@ -390,7 +416,7 @@ namespace ScreenGrab
 				saveAndCopyPathButton.Location = new Point(leftStart + copyButton.Width + saveButton.Width + (gap * 2), top);
 			}
 
-			if (e.Button == MouseButtons.Left && dragStartPoint.HasValue)
+			if (e.Button == MouseButtons.Left && dragStartPoint.HasValue && _activeTextBox == null)
 			{
 				Point currentPoint = new Point(e.X, e.Y - headerPanel.Height);
 				dragRectangle = new Rectangle(
@@ -409,7 +435,7 @@ namespace ScreenGrab
 
 		protected override void OnMouseUp(MouseEventArgs e)
 		{
-			if (e.Button == MouseButtons.Left && dragRectangle.HasValue)
+			if (e.Button == MouseButtons.Left && dragRectangle.HasValue && _activeTextBox == null)
 			{
 				// Ensure the rectangle has a minimum valid size (mouse was dragged sufficiently)
 				const int MinDimension = 10; // Minimum width and height for a valid rectangle
@@ -421,12 +447,267 @@ namespace ScreenGrab
 				dragRectangle = null;
 				Invalidate();
 			}
-			else
+			else if (_activeTextBox == null)
 			{
 				copyButton.Visible = false;
 				saveButton.Visible = false;
 				saveAndCopyPathButton.Visible = false;
 			}
+		}
+
+		protected override void OnMouseDoubleClick(MouseEventArgs e)
+		{
+			base.OnMouseDoubleClick(e);
+
+			if (capturedImage == null) return;
+			if (e.Button != MouseButtons.Left) return;
+			if (_activeTextBox != null) return;
+			if (copyButton.Bounds.Contains(e.Location) || saveButton.Bounds.Contains(e.Location)
+				|| saveAndCopyPathButton.Bounds.Contains(e.Location)) return;
+
+			// Image-relative position
+			int imgX = e.X;
+			int imgY = e.Y - headerPanel.Height;
+			if (imgX < 0 || imgY < 0 || imgX >= capturedImage.Width || imgY >= capturedImage.Height) return;
+
+			// Cancel any in-progress single-click drag that the double-click may have started
+			dragStartPoint = null;
+			dragRectangle = null;
+
+			StartTextBox(new Point(imgX, imgY));
+		}
+
+		private void StartTextBox(Point imageOrigin)
+		{
+			if (capturedImage == null) return;
+
+			_textBoxImageOrigin = imageOrigin;
+			_activeTextFontSize = DefaultFontSize * scaleFactor;
+
+			// TextBox left edge is imageOrigin.X, top edge is imageOrigin.Y + headerPanel.Height (form coords)
+			int formX = imageOrigin.X;
+			int formY = imageOrigin.Y + headerPanel.Height;
+
+			// Width spans from click point to right edge of image
+			int availableWidth = capturedImage.Width - imageOrigin.X;
+			if (availableWidth < 40) availableWidth = 40;
+
+			var tb = new TextBox
+			{
+				BorderStyle = BorderStyle.None,
+				BackColor = TextBgColor,
+				ForeColor = Color.White,
+				Font = new Font("Segoe UI", _activeTextFontSize, GraphicsUnit.Pixel),
+				Multiline = true,
+				WordWrap = true,
+				ScrollBars = ScrollBars.None,
+				Location = new Point(formX, formY),
+				Width = availableWidth,
+				Height = (int)(_activeTextFontSize + TextPadding * 2),
+				Padding = new Padding(TextPadding),
+			};
+
+			tb.TextChanged += TextBox_TextChanged;
+			tb.KeyDown += TextBox_KeyDown;
+			tb.Leave += TextBox_Leave;
+			tb.MouseDown += TextBox_MouseDown;
+			tb.MouseMove += TextBox_MouseMove;
+			tb.MouseUp += TextBox_MouseUp;
+			tb.MouseWheel += TextBox_MouseWheel;
+
+			_activeTextBox = tb;
+			Controls.Add(tb);
+			tb.BringToFront();
+			tb.Focus();
+
+			// Hide buttons while text box is active
+			copyButton.Visible = false;
+			saveButton.Visible = false;
+			saveAndCopyPathButton.Visible = false;
+		}
+
+		private void ResizeTextBox()
+		{
+			if (_activeTextBox == null || capturedImage == null) return;
+
+			int availableWidth = capturedImage.Width - _textBoxImageOrigin.X;
+			if (availableWidth < 40) availableWidth = 40;
+			_activeTextBox.Width = availableWidth;
+
+			// Measure the required height for all text at current width
+			Size measured = TextRenderer.MeasureText(
+				_activeTextBox.Text.Length > 0 ? _activeTextBox.Text : " ",
+				_activeTextBox.Font,
+				new Size(availableWidth - TextPadding * 2, int.MaxValue),
+				TextFormatFlags.WordBreak | TextFormatFlags.TextBoxControl);
+
+			int desiredHeight = measured.Height + TextPadding * 2;
+
+			// Clamp so the bottom doesn't exceed the image bottom edge
+			int maxHeight = capturedImage.Height - _textBoxImageOrigin.Y;
+			if (maxHeight < (int)(_activeTextFontSize + TextPadding * 2))
+				maxHeight = (int)(_activeTextFontSize + TextPadding * 2);
+
+			_activeTextBox.Height = Math.Min(desiredHeight, maxHeight);
+		}
+
+		private void TextBox_TextChanged(object? sender, EventArgs e)
+		{
+			ResizeTextBox();
+		}
+
+		private void TextBox_KeyDown(object? sender, KeyEventArgs e)
+		{
+			if (e.KeyCode == Keys.Enter && !e.Shift)
+			{
+				e.SuppressKeyPress = true;
+				CommitText();
+			}
+			// Escape is handled by ProcessCmdKey
+		}
+
+		private void TextBox_Leave(object? sender, EventArgs e)
+		{
+			// Only commit on leave if the text box is still active (not already committed/cancelled)
+			if (_activeTextBox != null)
+				CommitText();
+		}
+
+		private void TextBox_MouseDown(object? sender, MouseEventArgs e)
+		{
+			if (e.Button == MouseButtons.Left)
+			{
+				_tbDragStart = e.Location;
+				_tbDragging = false;
+			}
+		}
+
+		private void TextBox_MouseMove(object? sender, MouseEventArgs e)
+		{
+			if (_activeTextBox == null || !_tbDragStart.HasValue) return;
+			if (e.Button != MouseButtons.Left) return;
+
+			int dx = e.X - _tbDragStart.Value.X;
+			int dy = e.Y - _tbDragStart.Value.Y;
+
+			if (!_tbDragging && (Math.Abs(dx) > 4 || Math.Abs(dy) > 4))
+				_tbDragging = true;
+
+			if (_tbDragging && capturedImage != null)
+			{
+				// Move the text box in form coordinates, clamped to image bounds
+				int newFormX = Math.Max(0, Math.Min(_activeTextBox.Left + dx, capturedImage.Width - 1));
+				int newFormY = Math.Max(headerPanel.Height,
+					Math.Min(_activeTextBox.Top + dy, headerPanel.Height + capturedImage.Height - 1));
+
+				_activeTextBox.Location = new Point(newFormX, newFormY);
+				_textBoxImageOrigin = new Point(newFormX, newFormY - headerPanel.Height);
+				ResizeTextBox();
+			}
+		}
+
+		private void TextBox_MouseUp(object? sender, MouseEventArgs e)
+		{
+			_tbDragStart = null;
+			_tbDragging = false;
+		}
+
+		private void TextBox_MouseWheel(object? sender, MouseEventArgs e)
+		{
+			if (_activeTextBox == null) return;
+
+			float delta = e.Delta > 0 ? 1f : -1f;
+			float newSize = Math.Clamp(_activeTextFontSize + delta, MinFontSize * scaleFactor, MaxFontSize * scaleFactor);
+			if (newSize == _activeTextFontSize) return;
+
+			_activeTextFontSize = newSize;
+			Font oldFont = _activeTextBox.Font;
+			_activeTextBox.Font = new Font("Segoe UI", _activeTextFontSize, GraphicsUnit.Pixel);
+			oldFont.Dispose();
+			ResizeTextBox();
+		}
+
+		private void CommitText()
+		{
+			if (_activeTextBox == null) return;
+
+			var tb = _activeTextBox;
+			_activeTextBox = null; // clear first to prevent Leave re-entry
+
+			string text = tb.Text.Trim();
+			if (text.Length > 0 && capturedImage != null)
+			{
+				var annotation = new TextAnnotation(_textBoxImageOrigin, tb.Text, _activeTextFontSize);
+				_history.Push(annotation);
+				_redoStack.Clear();
+				DrawTextAnnotationOnBitmap(annotation);
+				Invalidate();
+			}
+
+			RemoveTextBox(tb);
+		}
+
+		private void CancelText()
+		{
+			if (_activeTextBox == null) return;
+			var tb = _activeTextBox;
+			_activeTextBox = null;
+			RemoveTextBox(tb);
+		}
+
+		private void RemoveTextBox(TextBox tb)
+		{
+			tb.TextChanged -= TextBox_TextChanged;
+			tb.KeyDown -= TextBox_KeyDown;
+			tb.Leave -= TextBox_Leave;
+			tb.MouseDown -= TextBox_MouseDown;
+			tb.MouseMove -= TextBox_MouseMove;
+			tb.MouseUp -= TextBox_MouseUp;
+			tb.MouseWheel -= TextBox_MouseWheel;
+
+			Font tbFont = tb.Font;
+			Controls.Remove(tb);
+			tb.Dispose();
+			tbFont.Dispose();
+
+			_tbDragStart = null;
+			_tbDragging = false;
+
+			// Return focus to form so keyboard shortcuts work
+			Focus();
+		}
+
+		private void DrawTextAnnotationOnBitmap(TextAnnotation annotation)
+		{
+			if (capturedImage == null) return;
+
+			using Font font = new Font("Segoe UI", annotation.FontSize, GraphicsUnit.Pixel);
+			int availableWidth = capturedImage.Width - annotation.Location.X;
+			if (availableWidth < 1) return;
+
+			Size measured = TextRenderer.MeasureText(
+				annotation.Text,
+				font,
+				new Size(availableWidth - TextPadding * 2, int.MaxValue),
+				TextFormatFlags.WordBreak | TextFormatFlags.TextBoxControl);
+
+			int boxWidth = measured.Width + TextPadding * 2;
+			int boxHeight = measured.Height + TextPadding * 2;
+
+			// Clamp to image bounds
+			boxWidth = Math.Min(boxWidth, availableWidth);
+			boxHeight = Math.Min(boxHeight, capturedImage.Height - annotation.Location.Y);
+
+			Rectangle bgRect = new Rectangle(annotation.Location.X, annotation.Location.Y, boxWidth, boxHeight);
+			Rectangle textRect = new Rectangle(
+				bgRect.X + TextPadding, bgRect.Y + TextPadding,
+				boxWidth - TextPadding * 2, boxHeight - TextPadding * 2);
+
+			using Graphics g = Graphics.FromImage(capturedImage);
+			using SolidBrush bgBrush = new SolidBrush(TextBgColor);
+			g.FillRectangle(bgBrush, bgRect);
+			TextRenderer.DrawText(g, annotation.Text, font, textRect, Color.White,
+				TextFormatFlags.WordBreak | TextFormatFlags.TextBoxControl);
 		}
 
 		private void CopyButton_Click(object? sender, EventArgs e)
@@ -632,6 +913,14 @@ namespace ScreenGrab
 
 		private void ResetFormState()
 		{
+			// Dismiss any active text box without committing
+			if (_activeTextBox != null)
+			{
+				var tb = _activeTextBox;
+				_activeTextBox = null;
+				RemoveTextBox(tb);
+			}
+
 			// Reset to initial state to prepare for next capture
 			FormBorderStyle = FormBorderStyle.None;
 			AutoScrollPosition = Point.Empty;
@@ -639,8 +928,8 @@ namespace ScreenGrab
 			dragRectangle = null;
 
 			// Clear undo/redo stacks
-			rectangleHistory.Clear();
-			redoStack.Clear();
+			_history.Clear();
+			_redoStack.Clear();
 			if (originalImage != null)
 			{
 				originalImage.Dispose();
@@ -669,45 +958,46 @@ namespace ScreenGrab
 		{
 			if (capturedImage == null) return;
 
-			// Add to history
-			rectangleHistory.Push(selection);
-			// Clear redo stack when a new rectangle is added
-			redoStack.Clear();
+			// Add to unified history
+			_history.Push(new RectAnnotation(selection));
+			// Clear redo stack when a new annotation is added
+			_redoStack.Clear();
 
 			// Draw the rectangle on the image
 			using Graphics g = Graphics.FromImage(capturedImage);
 			using Pen redPen = new Pen(Color.Red, highlightThickness);
-			DrawRoundedRectangle(g, redPen, selection, highlightCornerRadius); // Add rounded corners with a radius of 10
+			DrawRoundedRectangle(g, redPen, selection, highlightCornerRadius);
 			Invalidate(); // Trigger repaint to show the updated image
 		}
 
-		// Add these new methods for undo/redo functionality
-		private void UndoLastRectangle()
+		private void UndoLastAnnotation()
 		{
-			if (capturedImage == null || rectangleHistory.Count == 0) return;
+			if (capturedImage == null || _history.Count == 0) return;
 
-			// Pop the last rectangle from history and add to redo stack
-			Rectangle lastRect = rectangleHistory.Pop();
-			redoStack.Push(lastRect);
-
-			// Recreate the image from scratch with all rectangles except the last one
+			IAnnotation last = _history.Pop();
+			_redoStack.Push(last);
 			RedrawImage();
 		}
 
-		private void RedoRectangle()
+		private void RedoAnnotation()
 		{
-			if (capturedImage == null || redoStack.Count == 0) return;
+			if (capturedImage == null || _redoStack.Count == 0) return;
 
-			// Pop the last undone rectangle and add back to history
-			Rectangle redoRect = redoStack.Pop();
-			rectangleHistory.Push(redoRect);
+			IAnnotation annotation = _redoStack.Pop();
+			_history.Push(annotation);
 
-			// Draw this rectangle on the image
-			using Graphics g = Graphics.FromImage(capturedImage);
-			using Pen redPen = new Pen(Color.Red, highlightThickness);
-			DrawRoundedRectangle(g, redPen, redoRect, highlightCornerRadius);
+			if (annotation is RectAnnotation r)
+			{
+				using Graphics g = Graphics.FromImage(capturedImage);
+				using Pen redPen = new Pen(Color.Red, highlightThickness);
+				DrawRoundedRectangle(g, redPen, r.Rect, highlightCornerRadius);
+			}
+			else if (annotation is TextAnnotation t)
+			{
+				DrawTextAnnotationOnBitmap(t);
+			}
 
-			Invalidate(); // Refresh display
+			Invalidate();
 		}
 
 		private void RedrawImage()
@@ -724,22 +1014,23 @@ namespace ScreenGrab
 			using (Graphics g = Graphics.FromImage(capturedImage))
 			{
 				g.Clear(Color.Transparent);
-				g.DrawImage(originalImage, 0, 0);
+				g.DrawImage(originalImage!, 0, 0);
 			}
 
-			// Redraw all rectangles in history
+			// Redraw all annotations in history order (oldest first)
 			using (Graphics g = Graphics.FromImage(capturedImage))
 			{
 				using Pen redPen = new Pen(Color.Red, highlightThickness);
-				// Create a temporary copy of the history to preserve order
-				Rectangle[] tempHistory = rectangleHistory.Reverse().ToArray();
-				foreach (Rectangle rect in tempHistory)
+				foreach (IAnnotation annotation in _history.Reverse())
 				{
-					DrawRoundedRectangle(g, redPen, rect, highlightCornerRadius);
+					if (annotation is RectAnnotation r)
+						DrawRoundedRectangle(g, redPen, r.Rect, highlightCornerRadius);
+					else if (annotation is TextAnnotation t)
+						DrawTextAnnotationOnBitmap(t);
 				}
 			}
 
-			Invalidate(); // Refresh the display
+			Invalidate();
 		}
 
 		// Add fields to store the original image
