@@ -36,7 +36,8 @@ namespace ScreenGrab
 		private float _activeTextFontSize;
 
 		// Text box drag state
-		private Point? _tbDragStart = null;
+		private Point? _tbDragMouseDown = null;   // screen point where the drag began
+		private Point _tbDragGrabOffset;          // offset from box top-left to cursor at grab time (screen space)
 		private bool _tbDragging = false;
 
 		public Form1() : base()
@@ -488,9 +489,8 @@ namespace ScreenGrab
 			int formX = imageOrigin.X;
 			int formY = imageOrigin.Y + headerPanel.Height;
 
-			// Width spans from click point to right edge of image
-			int availableWidth = capturedImage.Width - imageOrigin.X;
-			if (availableWidth < 40) availableWidth = 40;
+			// Start small; the box auto-sizes to content via ResizeTextBox().
+			int initialWidth = (int)(_activeTextFontSize) + TextPadding * 2;
 
 			var tb = new TextBox
 			{
@@ -502,7 +502,7 @@ namespace ScreenGrab
 				WordWrap = true,
 				ScrollBars = ScrollBars.None,
 				Location = new Point(formX, formY),
-				Width = availableWidth,
+				Width = initialWidth,
 				Height = (int)(_activeTextFontSize + TextPadding * 2),
 				Padding = new Padding(TextPadding),
 			};
@@ -519,6 +519,7 @@ namespace ScreenGrab
 			Controls.Add(tb);
 			tb.BringToFront();
 			tb.Focus();
+			ResizeTextBox();
 
 			// Hide buttons while text box is active
 			copyButton.Visible = false;
@@ -530,15 +531,32 @@ namespace ScreenGrab
 		{
 			if (_activeTextBox == null || capturedImage == null) return;
 
-			int availableWidth = capturedImage.Width - _textBoxImageOrigin.X;
-			if (availableWidth < 40) availableWidth = 40;
-			_activeTextBox.Width = availableWidth;
+			// Maximum width the box may occupy before wrapping (click point to image right edge)
+			int maxWidth = capturedImage.Width - _textBoxImageOrigin.X;
+			int minWidth = (int)(_activeTextFontSize) + TextPadding * 2;
+			if (maxWidth < minWidth) maxWidth = minWidth;
 
-			// Measure the required height for all text at current width
-			Size measured = TextRenderer.MeasureText(
-				_activeTextBox.Text.Length > 0 ? _activeTextBox.Text : " ",
+			string textForMeasure = _activeTextBox.Text.Length > 0 ? _activeTextBox.Text : " ";
+
+			// Natural content width. Measure with the SAME flags used for wrapping/drawing so
+			// the widths agree -- otherwise a single line can wrap by a pixel after committing.
+			Size natural = TextRenderer.MeasureText(
+				textForMeasure,
 				_activeTextBox.Font,
-				new Size(availableWidth - TextPadding * 2, int.MaxValue),
+				new Size(int.MaxValue, int.MaxValue),
+				TextFormatFlags.WordBreak | TextFormatFlags.TextBoxControl);
+
+			// +1px guard so the resolved width is never a hair narrower than the natural
+			// width (which would force an unwanted wrap).
+			int contentWidth = Math.Min(natural.Width + TextPadding * 2 + 1, maxWidth);
+			if (contentWidth < minWidth) contentWidth = minWidth;
+			_activeTextBox.Width = contentWidth;
+
+			// Measure the required height for all text at the resolved width (wraps if needed)
+			Size measured = TextRenderer.MeasureText(
+				textForMeasure,
+				_activeTextBox.Font,
+				new Size(contentWidth - TextPadding * 2, int.MaxValue),
 				TextFormatFlags.WordBreak | TextFormatFlags.TextBoxControl);
 
 			int desiredHeight = measured.Height + TextPadding * 2;
@@ -575,41 +593,72 @@ namespace ScreenGrab
 
 		private void TextBox_MouseDown(object? sender, MouseEventArgs e)
 		{
-			if (e.Button == MouseButtons.Left)
+			if (e.Button == MouseButtons.Left && _activeTextBox != null)
 			{
-				_tbDragStart = e.Location;
+				// Work in screen coordinates so the grab anchor stays fixed as the box moves.
+				Point screenMouse = _activeTextBox.PointToScreen(e.Location);
+				// Box top-left in screen coords:
+				Point boxScreen = PointToScreen(_activeTextBox.Location);
+				_tbDragMouseDown = screenMouse;
+				// Offset from the box's top-left to the cursor, in screen space (stays constant).
+				_tbDragGrabOffset = new Point(
+					screenMouse.X - boxScreen.X,
+					screenMouse.Y - boxScreen.Y);
 				_tbDragging = false;
 			}
 		}
 
 		private void TextBox_MouseMove(object? sender, MouseEventArgs e)
 		{
-			if (_activeTextBox == null || !_tbDragStart.HasValue) return;
+			if (_activeTextBox == null || !_tbDragMouseDown.HasValue) return;
 			if (e.Button != MouseButtons.Left) return;
 
-			int dx = e.X - _tbDragStart.Value.X;
-			int dy = e.Y - _tbDragStart.Value.Y;
+			Point screenMouse = _activeTextBox.PointToScreen(e.Location);
+			int dx = screenMouse.X - _tbDragMouseDown.Value.X;
+			int dy = screenMouse.Y - _tbDragMouseDown.Value.Y;
 
 			if (!_tbDragging && (Math.Abs(dx) > 4 || Math.Abs(dy) > 4))
 				_tbDragging = true;
 
 			if (_tbDragging && capturedImage != null)
 			{
-				// Move the text box in form coordinates, clamped to image bounds
-				int newFormX = Math.Max(0, Math.Min(_activeTextBox.Left + dx, capturedImage.Width - 1));
-				int newFormY = Math.Max(headerPanel.Height,
-					Math.Min(_activeTextBox.Top + dy, headerPanel.Height + capturedImage.Height - 1));
+				// Desired box top-left in screen coords = cursor - fixed grab offset,
+				// then convert back to this form's client coords.
+				Point desiredScreen = new Point(
+					screenMouse.X - _tbDragGrabOffset.X,
+					screenMouse.Y - _tbDragGrabOffset.Y);
+				Point desiredClient = PointToClient(desiredScreen);
+				int desiredX = desiredClient.X;
+				int desiredY = desiredClient.Y;
 
+				// Clamp the box's TOP-LEFT to the image area. We clamp the origin (not the
+				// far edge) so the box can be moved right up to the edge; ResizeTextBox then
+				// shrinks the wrap width and re-wraps the text as the box nears the edge.
+				int newFormX = Math.Max(0, Math.Min(desiredX, capturedImage.Width - 1));
+				int newFormY = Math.Max(headerPanel.Height,
+					Math.Min(desiredY, headerPanel.Height + capturedImage.Height - 1));
+
+				// Apply position + re-fit in one layout pass to avoid intermediate repaints.
+				_activeTextBox.SuspendLayout();
 				_activeTextBox.Location = new Point(newFormX, newFormY);
 				_textBoxImageOrigin = new Point(newFormX, newFormY - headerPanel.Height);
+
+				// Re-fit width/height to the new available space (handles wrapping near the
+				// right edge). The coordinate math above is stable, so this no longer jitters.
 				ResizeTextBox();
+				_activeTextBox.ResumeLayout();
 			}
 		}
 
 		private void TextBox_MouseUp(object? sender, MouseEventArgs e)
 		{
-			_tbDragStart = null;
+			bool wasDragging = _tbDragging;
+			_tbDragMouseDown = null;
 			_tbDragging = false;
+
+			// The new position changes the available wrap width; re-fit once now that the drag ended.
+			if (wasDragging)
+				ResizeTextBox();
 		}
 
 		private void TextBox_MouseWheel(object? sender, MouseEventArgs e)
@@ -670,7 +719,7 @@ namespace ScreenGrab
 			tb.Dispose();
 			tbFont.Dispose();
 
-			_tbDragStart = null;
+			_tbDragMouseDown = null;
 			_tbDragging = false;
 
 			// Return focus to form so keyboard shortcuts work
@@ -682,20 +731,30 @@ namespace ScreenGrab
 			if (capturedImage == null) return;
 
 			using Font font = new Font("Segoe UI", annotation.FontSize, GraphicsUnit.Pixel);
-			int availableWidth = capturedImage.Width - annotation.Location.X;
-			if (availableWidth < 1) return;
+			int maxWidth = capturedImage.Width - annotation.Location.X;
+			if (maxWidth < 1) return;
+
+			// Auto-size to content width, capped at the available width (wraps only if needed).
+			// Mirrors ResizeTextBox -- same flags as the wrap/draw step so widths agree and a
+			// single line doesn't wrap by a pixel after committing.
+			Size natural = TextRenderer.MeasureText(
+				annotation.Text,
+				font,
+				new Size(int.MaxValue, int.MaxValue),
+				TextFormatFlags.WordBreak | TextFormatFlags.TextBoxControl);
+
+			// +1px guard (matches ResizeTextBox) so a single line doesn't wrap by a hair.
+			int boxWidth = Math.Min(natural.Width + TextPadding * 2 + 1, maxWidth);
 
 			Size measured = TextRenderer.MeasureText(
 				annotation.Text,
 				font,
-				new Size(availableWidth - TextPadding * 2, int.MaxValue),
+				new Size(boxWidth - TextPadding * 2, int.MaxValue),
 				TextFormatFlags.WordBreak | TextFormatFlags.TextBoxControl);
 
-			int boxWidth = measured.Width + TextPadding * 2;
 			int boxHeight = measured.Height + TextPadding * 2;
 
 			// Clamp to image bounds
-			boxWidth = Math.Min(boxWidth, availableWidth);
 			boxHeight = Math.Min(boxHeight, capturedImage.Height - annotation.Location.Y);
 
 			Rectangle bgRect = new Rectangle(annotation.Location.X, annotation.Location.Y, boxWidth, boxHeight);
