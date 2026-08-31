@@ -1,6 +1,6 @@
 ## screen-grab
 
-A Windows screen-capture utility created by vibe coding.
+A Windows screen-capture utility.
 
 ## Usage
 
@@ -13,3 +13,11 @@ A Windows screen-capture utility created by vibe coding.
     - Save image to disk, or
     - Save image to disk and copy file path to clipboard
 - <kbd>Esc</kbd> to close
+
+## Run at startup
+
+Right-click the ScreenGrab tray icon and check **Run at startup**. This adds a per-user entry under
+`HKCU\Software\Microsoft\Windows\CurrentVersion\Run` (no admin rights needed); it also appears in
+Task Manager → Startup apps and Settings → Apps → Startup. Uncheck it to remove the entry.
+
+If you move the executable, re-toggle the option so the registry entry points at the new path.

@@ -32,7 +32,8 @@ static class Program
 		// Create a NotifyIcon for the system tray
 		NotifyIcon trayIcon = new NotifyIcon
 		{
-			Icon = new Icon("icon.ico"),
+			// Use an absolute path: the working directory is not the exe folder when launched at startup
+			Icon = new Icon(Path.Combine(AppContext.BaseDirectory, "icon.ico")),
 			Visible = true,
 			Text = "ScreenGrab",
 			ContextMenuStrip = new ContextMenuStrip()
@@ -40,6 +41,24 @@ static class Program
 
 		// Add options to the tray menu
 		trayIcon.ContextMenuStrip.Items.Add("Capture (Ctrl-Alt-F12)", null, (sender, e) => mainForm.StartCapture());
+
+		var startupItem = new ToolStripMenuItem("Run at startup")
+		{
+			CheckOnClick = true,
+			Checked = StartupManager.IsEnabled()
+		};
+		startupItem.Click += (sender, e) =>
+		{
+			if (!StartupManager.SetEnabled(startupItem.Checked))
+			{
+				startupItem.Checked = StartupManager.IsEnabled();
+			}
+		};
+		// Keep the check state accurate if the user toggles it via Task Manager / Settings
+		trayIcon.ContextMenuStrip.Opening += (sender, e) => startupItem.Checked = StartupManager.IsEnabled();
+		trayIcon.ContextMenuStrip.Items.Add(startupItem);
+
+		trayIcon.ContextMenuStrip.Items.Add(new ToolStripSeparator());
 		trayIcon.ContextMenuStrip.Items.Add("Exit", null, (sender, e) => Application.Exit());
 
 		// Enable tray icon double-click to start capture
