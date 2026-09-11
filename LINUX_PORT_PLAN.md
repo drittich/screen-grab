@@ -95,9 +95,16 @@ All references are to current [ScreenGrab/Form1.cs](ScreenGrab/Form1.cs) unless 
   use `wl-copy` (present with Plasma/Wayland). Document `wl-clipboard` as a dependency.
 - **Autostart**: `IStartupManager` writes `~/.config/autostart/screengrab.desktop` with
   `Exec=screengrab` (no `--capture`), mirroring the registry toggle in the tray menu.
-- **Packaging**: publish self-contained (`dotnet publish -r linux-x64`) + an install script that
-  drops the binary, a `screengrab.desktop` app entry, and the icon into `~/.local`. Note the
-  runtime deps: `spectacle`, `wl-clipboard`.
+- **Packaging (Fedora only)**: build an **RPM** that installs system-wide and is manageable with
+  `dnf`/`rpm`. Publish self-contained (`dotnet publish -c Release -r linux-x64 --self-contained`), then
+  package the output into an `.rpm` (via `rpmbuild` with a `screengrab.spec`, or `dotnet-rpm`/`fpm` if
+  simpler). The RPM lays down: the app payload under `/usr/lib/screengrab/`, a `screengrab` launcher on
+  `PATH` (`/usr/bin/screengrab`), a `screengrab.desktop` app entry in `/usr/share/applications/`, and the
+  icon in `/usr/share/icons/hicolor/`. Declare RPM `Requires:` on the runtime deps **`spectacle`** and
+  **`wl-clipboard`** so `dnf install ./screengrab-*.rpm` pulls them in. Target Fedora 44 (Plasma 6,
+  Wayland); no other distro/format (no Flatpak, no `~/.local` install script) is required. Install/upgrade/
+  remove is then `sudo dnf install ./screengrab-<ver>.x86_64.rpm` / `sudo dnf upgrade` / `sudo dnf remove
+  screengrab`.
 
 ### Known Wayland caveats to accept
 
@@ -263,7 +270,10 @@ All references are to current [ScreenGrab/Form1.cs](ScreenGrab/Form1.cs) unless 
      `~/Downloads`. Hotkey/IPC (phase 6) and packaging (phase 7) remain.
 6. **Hotkey/IPC**: Windows `RegisterHotKey`; Linux `--capture` flag + socket + documented KDE
    custom shortcut.
-7. **Package**: Windows publish (unchanged UX) + Linux self-contained publish and install script.
+7. **Package**: Windows publish (unchanged UX) + Fedora **RPM** (`dnf`-installable): self-contained
+   `linux-x64` publish packaged as `screengrab-<ver>.x86_64.rpm` with `Requires: spectacle,
+   wl-clipboard`, installing the launcher, `.desktop`, and icon system-wide. Fedora 44 only — no other
+   Linux distro or package format.
 
 ## Verification
 
