@@ -18,4 +18,22 @@ internal static class PlatformServices
 		return new ScreenGrab.Linux.SpectacleScreenCapture();
 #endif
 	}
+
+	public static IClipboardService CreateClipboardService()
+	{
+#if WINDOWS
+		return new ScreenGrab.Windows.WindowsClipboardService();
+#else
+		return new ScreenGrab.Linux.WlCopyClipboardService();
+#endif
+	}
+
+	public static IStartupManager CreateStartupManager()
+	{
+#if WINDOWS
+		return new ScreenGrab.Windows.WindowsStartupManager();
+#else
+		return new ScreenGrab.Linux.LinuxStartupManager();
+#endif
+	}
 }

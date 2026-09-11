@@ -14,6 +14,8 @@ public partial class App : Application
 {
 	public override void Initialize() => AvaloniaXamlLoader.Load(this);
 
+	private readonly IStartupManager _startup = PlatformServices.CreateStartupManager();
+
 	public override void OnFrameworkInitializationCompleted()
 	{
 		// Tray-only app: no main window. The editor/selection windows are
@@ -22,6 +24,14 @@ public partial class App : Application
 			desktop.ShutdownMode = ShutdownMode.OnExplicitShutdown;
 
 		base.OnFrameworkInitializationCompleted();
+
+		// Reflect the current autostart state on the tray checkbox.
+		NativeMenuItem? item = FindStartupMenuItem();
+		if (item != null)
+		{
+			try { item.IsChecked = _startup.IsEnabled(); }
+			catch { /* leave unchecked if the state can't be read */ }
+		}
 	}
 
 	// Guards against re-entrant capture (a second tray click while the picker is up).
@@ -77,7 +87,35 @@ public partial class App : Application
 
 	private void OnToggleStartup(object? sender, EventArgs e)
 	{
-		// Phase 5: IStartupManager (registry on Windows, .desktop on Linux).
+		NativeMenuItem? item = sender as NativeMenuItem ?? FindStartupMenuItem();
+		if (item == null) return;
+
+		// The CheckBox toggle has already flipped IsChecked; apply that desired state, and revert the
+		// visible check if the registry/.desktop write fails so the menu never lies.
+		bool desired = item.IsChecked;
+		try
+		{
+			_startup.SetEnabled(desired);
+		}
+		catch (Exception ex)
+		{
+			item.IsChecked = !desired;
+			ToastWindow.Show($"Could not update the startup setting: {ex.Message}");
+		}
+	}
+
+	// Locate the "Run at startup" tray menu item by walking the TrayIcon menu (x:Name fields aren't
+	// generated for Application-derived XAML the way they are for windows).
+	private NativeMenuItem? FindStartupMenuItem()
+	{
+		TrayIcons? icons = TrayIcon.GetIcons(this);
+		NativeMenu? menu = icons is { Count: > 0 } ? icons[0].Menu : null;
+		if (menu == null) return null;
+
+		foreach (NativeMenuItemBase entry in menu.Items)
+			if (entry is NativeMenuItem { Header: "Run at startup" } checkbox)
+				return checkbox;
+		return null;
 	}
 
 	private void OnExit(object? sender, EventArgs e)

@@ -32,6 +32,7 @@ public partial class EditorWindow : Window
 	private readonly SKBitmap _clean;               // pristine capture; never mutated
 	private readonly AnnotationHistory _history = new();
 	private readonly AnnotationCompositor _compositor;
+	private readonly IClipboardService _clipboard = PlatformServices.CreateClipboardService();
 	private readonly float _scaleFactor;
 
 	private WriteableBitmap? _display;              // current Avalonia frame (disposed on replace)
@@ -496,11 +497,70 @@ public partial class EditorWindow : Window
 		Focus(); // return focus so keyboard shortcuts keep working
 	}
 
-	// ---- Toolbar (Copy / Save wired in phase 5) ----------------------------------------------
+	// ---- Toolbar (Copy / Save / Save & Copy Path) --------------------------------------------
 
-	private void OnCopyClick(object? sender, RoutedEventArgs e) { /* phase 5: IClipboardService */ }
-	private void OnSaveClick(object? sender, RoutedEventArgs e) { /* phase 5: save PNG */ }
-	private void OnSavePathClick(object? sender, RoutedEventArgs e) { /* phase 5: save + copy path */ }
+	/// <summary>Composites the current annotations onto the clean capture. Caller disposes.</summary>
+	private SKBitmap BuildComposite()
+	{
+		CommitPendingText();
+		return _compositor.Render(_clean, _history.ProjectAnnotations());
+	}
+
+	// Commit any live text box so it is burned into the copied/saved image (mirrors the WinForms
+	// flow where committing happened before Copy/Save ran).
+	private void CommitPendingText()
+	{
+		if (_activeTextBox != null)
+			CommitText();
+	}
+
+	// Copy the annotated image to the clipboard, then close — the port of CopyButton_Click
+	// (Form1 L907) whose Hide() becomes Close() for this per-capture window.
+	private void OnCopyClick(object? sender, RoutedEventArgs e)
+	{
+		try
+		{
+			using SKBitmap composite = BuildComposite();
+			_clipboard.SetImage(composite);
+			Close();
+		}
+		catch (Exception ex)
+		{
+			ToastWindow.Show($"Failed to copy image: {ex.Message}");
+		}
+	}
+
+	private void OnSaveClick(object? sender, RoutedEventArgs e) => SaveScreenshot(copyPath: false);
+
+	private void OnSavePathClick(object? sender, RoutedEventArgs e) => SaveScreenshot(copyPath: true);
+
+	// The port of SaveScreenshot (Form1 L921): encode a PNG to ~/Downloads/ScreenGrab, optionally
+	// copy the path to the clipboard, toast the result, then close.
+	private void SaveScreenshot(bool copyPath)
+	{
+		try
+		{
+			string filePath;
+			using (SKBitmap composite = BuildComposite())
+				filePath = ScreenshotSaver.Save(composite);
+
+			if (copyPath)
+			{
+				_clipboard.SetText(filePath);
+				ToastWindow.Show($"Image saved to {filePath}\nPath copied to clipboard");
+			}
+			else
+			{
+				ToastWindow.Show($"Image saved to {filePath}");
+			}
+
+			Close();
+		}
+		catch (Exception ex)
+		{
+			ToastWindow.Show($"Failed to save image: {ex.Message}");
+		}
+	}
 
 	// ---- Lifetime ----------------------------------------------------------------------------
 

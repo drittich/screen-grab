@@ -226,7 +226,41 @@ All references are to current [ScreenGrab/Form1.cs](ScreenGrab/Form1.cs) unless 
      end on either OS (needs a real click on the tray/capture); Spectacle's exact Plasma-6 flag support
      (`-m` current monitor) is unverified on the target box — fall back to KWin ScreenShot2 DBus if the
      flags differ (per Open risks). Multi-monitor uses the primary monitor only, matching today.
-5. **Tray, clipboard, save, toast, autostart** behind the interfaces for both OSes.
+5. ✅ **Tray, clipboard, save, toast, autostart** behind the interfaces for both OSes.
+   - Done 2026-09-11. Two Core interfaces + a save helper, per-OS impls for each, a toast window, and
+     the editor toolbar / tray startup toggle wired to them.
+     - `ScreenGrab.Core/IClipboardService.cs` (`SetImage(SKBitmap)`/`SetText(string)`) and
+       `IStartupManager.cs` (`IsEnabled()`/`SetEnabled(bool)`, throws on failure). `ScreenshotSaver.cs`
+       ports `SaveScreenshot` (Form1 L921): PNG-encode via `SKBitmap.Encode` to
+       `~/Downloads/ScreenGrab/Screenshot_<ts>.png` (the `UserProfile`+`Downloads` path is already
+       cross-platform), returns the path; clipboard/toast stay with the caller.
+     - `ScreenGrab.Windows/WindowsClipboardService.cs` — self-contained Win32 clipboard P/Invoke
+       (no System.Drawing): image as CF_DIB (bottom-up 32bpp BGRA, alpha forced opaque), text as
+       CF_UNICODETEXT, via `OpenClipboard`/`GlobalAlloc`/`SetClipboardData`. Replaces
+       `Clipboard.SetImage`/`SetText` (Form1 L911/L943). `WindowsStartupManager.cs` — the registry
+       `...\Run` port of `StartupManager.cs`, using `Environment.ProcessPath`; throws instead of the
+       old MessageBox so the tray checkbox can revert on failure.
+     - `ScreenGrab.Linux/WlCopyClipboardService.cs` — streams a Skia-encoded PNG to
+       `wl-copy --type image/png` and text to `wl-copy`, each with an `xclip` X11 fallback; a missing
+       tool throws a clear "install wl-clipboard" message. `LinuxStartupManager.cs` — writes/removes
+       `~/.config/autostart/screengrab.desktop` (`Exec=screengrab`), honoring `XDG_CONFIG_HOME`.
+     - `ScreenGrab.App/ToastWindow.axaml(.cs)` — the `ShowSilentNotification` port (Form1 L988):
+       borderless topmost auto-close (3s `DispatcherTimer`) window, rounded `Border` instead of the
+       `CreateRoundRectRgn` P/Invoke, `CenterScreen` placement (only-most-recent-toast wins).
+     - `PlatformServices.cs` gains `CreateClipboardService()`/`CreateStartupManager()` (`#if WINDOWS`
+       factories). `EditorWindow` toolbar wired: Copy → composite + `SetImage` + close;
+       Save/Save&CopyPath → `ScreenshotSaver.Save` (+ `SetText(path)`) + toast + close; a pending text
+       box is committed into the burned image first, errors surface as a toast. `App.axaml.cs` wires
+       the tray "Run at startup" checkbox to `IStartupManager` (state read at startup, reverts + toasts
+       on write failure); the menu item is found by header walk since Avalonia doesn't generate x:Name
+       fields for `Application` XAML / `NativeMenuItem`.
+   - Both TFMs build clean (0/0); full solution builds; 18 Core tests green; Windows exe launches and
+     stays resident in the tray. Deviations/known gaps: Linux clipboard uses `wl-copy` for **both**
+     text and image (the plan suggested Avalonia for text) to avoid needing a `TopLevel` in the toast
+     path — simpler and dependency-consistent. CF_DIB image clipboard parity with the old
+     `Clipboard.SetImage` and `wl-copy`/Klipper image behavior are **not yet validated** on a real
+     paste (an Open risk); no `ScreenshotSaver` unit test to avoid writing into the dev's real
+     `~/Downloads`. Hotkey/IPC (phase 6) and packaging (phase 7) remain.
 6. **Hotkey/IPC**: Windows `RegisterHotKey`; Linux `--capture` flag + socket + documented KDE
    custom shortcut.
 7. **Package**: Windows publish (unchanged UX) + Linux self-contained publish and install script.
