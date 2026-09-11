@@ -268,8 +268,31 @@ All references are to current [ScreenGrab/Form1.cs](ScreenGrab/Form1.cs) unless 
      `Clipboard.SetImage` and `wl-copy`/Klipper image behavior are **not yet validated** on a real
      paste (an Open risk); no `ScreenshotSaver` unit test to avoid writing into the dev's real
      `~/Downloads`. Hotkey/IPC (phase 6) and packaging (phase 7) remain.
-6. **Hotkey/IPC**: Windows `RegisterHotKey`; Linux `--capture` flag + socket + documented KDE
+6. ✅ **Hotkey/IPC**: Windows `RegisterHotKey`; Linux `--capture` flag + socket + documented KDE
    custom shortcut.
+   - Done 2026-09-11. Two Core interfaces, per-OS impls, and the App/Program wiring:
+     - `ScreenGrab.Core/IGlobalHotkey.cs` (`Register(Action)`) and `ISingleInstanceIpc.cs`
+       (`TryAcquire`/`StartListening`/`CaptureRequested`/`SignalCapture`).
+     - `ScreenGrab.Windows/WindowsGlobalHotkey.cs` — the `Form1` user32 hotkey port. Since Avalonia
+       has no `WndProc`, it runs a private **message-only window** (`HWND_MESSAGE`) on its own thread,
+       `RegisterHotKey`s Ctrl-Alt-F12 (+Ctrl-Alt-PrintScreen), and pumps `GetMessage`, invoking the
+       callback on each `WM_HOTKEY`. `WindowsSingleInstanceIpc.cs` — the `Program.cs` named `Mutex`
+       port for primary ownership, plus a `NamedPipeServerStream` so a later `screengrab --capture`
+       forwards "capture" to the resident instance.
+     - `ScreenGrab.Linux/LinuxGlobalHotkey.cs` — a **no-op** (Wayland forbids self-grabbing a global
+       hotkey; capture arrives via IPC from the KDE shortcut). `LinuxSingleInstanceIpc.cs` — a
+       Unix-domain socket at `$XDG_RUNTIME_DIR/screengrab.sock`; binding claims primary, a stale socket
+       is probed-then-unlinked, `--capture` connects and sends "capture".
+     - `Program.cs` — parses `--capture`, `TryAcquire()`s the lock before starting Avalonia; a second
+       launch forwards its capture (if `--capture`) and exits 0. `App.axaml.cs` registers the hotkey,
+       wires `CaptureRequested` + a cold-start `--capture` to `StartCaptureAsync` (both marshalled via
+       `Dispatcher.UIThread.Post`), and disposes the hotkey on `desktop.Exit`. `PlatformServices` gains
+       `CreateGlobalHotkey()`/`CreateSingleInstanceIpc()` factories.
+   - README documents the one-time KDE custom-shortcut bind (Ctrl+Alt+F12 → `screengrab --capture`).
+     Both TFMs build clean (0/0); 18 Core tests green. Windows smoke test verified: primary stays
+     resident, a plain second launch and a `--capture` forward both exit 0 while the primary keeps
+     running (the forward triggers a capture on it). Linux socket path/flags **not yet smoke-tested**
+     on the target box. Packaging (phase 7) remains.
 7. **Package**: Windows publish (unchanged UX) + Fedora **RPM** (`dnf`-installable): self-contained
    `linux-x64` publish packaged as `screengrab-<ver>.x86_64.rpm` with `Requires: spectacle,
    wl-clipboard`, installing the launcher, `.desktop`, and icon system-wide. Fedora 44 only — no other

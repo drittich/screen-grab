@@ -5,6 +5,7 @@ using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Interactivity;
 using Avalonia.Markup.Xaml;
+using Avalonia.Threading;
 using ScreenGrab.Core;
 using SkiaSharp;
 
@@ -15,13 +16,17 @@ public partial class App : Application
 	public override void Initialize() => AvaloniaXamlLoader.Load(this);
 
 	private readonly IStartupManager _startup = PlatformServices.CreateStartupManager();
+	private IGlobalHotkey? _hotkey;
 
 	public override void OnFrameworkInitializationCompleted()
 	{
 		// Tray-only app: no main window. The editor/selection windows are
 		// created on demand in later phases.
 		if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
+		{
 			desktop.ShutdownMode = ShutdownMode.OnExplicitShutdown;
+			desktop.Exit += (_, _) => { _hotkey?.Dispose(); };
+		}
 
 		base.OnFrameworkInitializationCompleted();
 
@@ -32,6 +37,22 @@ public partial class App : Application
 			try { item.IsChecked = _startup.IsEnabled(); }
 			catch { /* leave unchecked if the state can't be read */ }
 		}
+
+		// Global hotkey (Windows self-registers Ctrl-Alt-F12; Linux is a no-op) and the single-instance
+		// IPC listener — both funnel to a capture, marshalled onto the UI thread.
+		_hotkey = PlatformServices.CreateGlobalHotkey();
+		try { _hotkey.Register(() => Dispatcher.UIThread.Post(() => _ = StartCaptureAsync())); }
+		catch (Exception ex) { Console.Error.WriteLine($"ScreenGrab: hotkey registration failed: {ex.Message}"); }
+
+		if (Program.Ipc is { } ipc)
+		{
+			ipc.CaptureRequested += () => Dispatcher.UIThread.Post(() => _ = StartCaptureAsync());
+			ipc.StartListening();
+		}
+
+		// A `--capture` launch (the KDE shortcut on a cold start) captures immediately.
+		if (Program.LaunchWithCapture)
+			Dispatcher.UIThread.Post(() => _ = StartCaptureAsync());
 	}
 
 	// Guards against re-entrant capture (a second tray click while the picker is up).

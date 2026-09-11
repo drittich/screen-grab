@@ -36,4 +36,22 @@ internal static class PlatformServices
 		return new ScreenGrab.Linux.LinuxStartupManager();
 #endif
 	}
+
+	public static IGlobalHotkey CreateGlobalHotkey()
+	{
+#if WINDOWS
+		return new ScreenGrab.Windows.WindowsGlobalHotkey();
+#else
+		return new ScreenGrab.Linux.LinuxGlobalHotkey();
+#endif
+	}
+
+	public static ISingleInstanceIpc CreateSingleInstanceIpc()
+	{
+#if WINDOWS
+		return new ScreenGrab.Windows.WindowsSingleInstanceIpc();
+#else
+		return new ScreenGrab.Linux.LinuxSingleInstanceIpc();
+#endif
+	}
 }
