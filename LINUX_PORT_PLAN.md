@@ -165,8 +165,34 @@ All references are to current [ScreenGrab/Form1.cs](ScreenGrab/Form1.cs) unless 
    - Text metric parity with WinForms `TextRenderer` is not yet visually validated on a real capture
      (the known risk); the wrap math is faithful but the +1px guard may need re-tuning in phase 3/4.
      Save/PNG-encode via Skia stays in phase 5. Full solution builds clean (old WinForms project untouched).
-3. **Editor window** in Avalonia: render the SKBitmap, port mouse/keyboard annotation flow and
+3. ✅ **Editor window** in Avalonia: render the SKBitmap, port mouse/keyboard annotation flow and
    the text-box overlay (create → drag → resize → wheel-font → commit/cancel/edit/delete).
+   - Done 2026-09-11. Three files added to `ScreenGrab.App`:
+     - `EditorWindow.axaml` / `.axaml.cs` — an Avalonia `Window` (toolbar + `ScrollViewer` over a
+       `Canvas` overlay hosting an `Image`). Ctor takes an `SKBitmap` (owns/disposes it). Uses
+       `AnnotationHistory` + `AnnotationCompositor` from Core; re-projects and repaints on every
+       change. Ports `Form1` verbatim in behaviour: left-drag draws a red rounded-rect rubber-band
+       (Avalonia `Rectangle` preview, committed as `AddRectOp` at ≥10px); double-click hit-tests
+       live text (via `MeasureText` bounds) to edit-in-place or starts a new text box; text box
+       auto-sizes through the compositor's `MeasureText` so the live box matches the burned-in
+       result; drag-to-move (4px threshold, fixed grab offset), mouse-wheel font size
+       (`Min/MaxFontSize*scale`), Enter/LostFocus commit, Esc cancels; edit commits as one
+       `EditTextOp`/`DeleteTextOp`, hiding the original via the compositor's `exclude` while editing.
+       Ctrl+Z/Ctrl+Y drive `AnnotationHistory.Undo/Redo`; Esc closes when no text box is active.
+     - `SkiaInterop.cs` — copies a composited `SKBitmap` into an Avalonia BGRA8888 `WriteableBitmap`
+       (managed `Marshal.Copy`, stride-aware; no `unsafe`). Conversion runs only when the composite
+       changes, not per frame.
+   - Coordinates: the overlay `Canvas` is laid out 1:1 with image pixels (no `headerPanel.Height`
+     offset — the toolbar is a separate dock region), so pointer positions are image coordinates.
+   - Tray `Capture`/click now open the editor on a blank 1280×800 canvas — a **temporary phase-3
+     harness** so the flow is exercisable on both OSes before capture exists; phase 4 swaps the blank
+     bitmap for an `IScreenCapture` result via the selection overlay. Toolbar Copy/Save/Save&CopyPath
+     buttons are present but stubbed (phase 5).
+   - Both TFMs build clean (0/0); 15 Core tests still green; Windows exe launches and stays resident.
+     Deviations/known gaps: `_scaleFactor` is fixed at 1 for now (real `RenderScaling` threading is
+     deferred — HiDPI captures display 1:1 in DIPs, may look soft until phase 4); SkiaSharp vs
+     Avalonia `TextBox` text metrics may differ by a hair (the known wrap risk) — not yet validated
+     on a real capture; interactive editor UX **not yet smoke-tested** on Fedora/KDE.
 4. **Capture + selection overlay**: `IScreenCapture` (Windows GDI first, then Spectacle on
    Linux) feeding the fullscreen selection window → crop → editor.
 5. **Tray, clipboard, save, toast, autostart** behind the interfaces for both OSes.

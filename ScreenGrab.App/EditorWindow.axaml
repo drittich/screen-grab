@@ -1,0 +1,30 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="ScreenGrab.App.EditorWindow"
+        Title="ScreenGrab"
+        Icon="/Assets/icon.ico"
+        Background="#202020"
+        CanResize="True"
+        ShowInTaskbar="False"
+        WindowStartupLocation="CenterScreen">
+
+	<DockPanel>
+		<!-- Toolbar. Copy / Save / Save &amp; Copy Path are wired in phase 5. -->
+		<Border DockPanel.Dock="Top" Background="#2D2D2D" Padding="8">
+			<StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Spacing="10">
+				<Button x:Name="CopyButton" Content="Copy" Click="OnCopyClick" />
+				<Button x:Name="SaveButton" Content="Save" Click="OnSaveClick" />
+				<Button x:Name="SavePathButton" Content="Save &amp; Copy Path" Click="OnSavePathClick" />
+			</StackPanel>
+		</Border>
+
+		<!-- Scrollable image surface. The overlay Canvas hosts the rendered capture, the
+		     rubber-band rectangle, and any live text box, all in image-pixel coordinates. -->
+		<ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto">
+			<Canvas x:Name="Overlay" Background="Transparent">
+				<Image x:Name="ImageView" Stretch="None" Canvas.Left="0" Canvas.Top="0" />
+			</Canvas>
+		</ScrollViewer>
+	</DockPanel>
+
+</Window>

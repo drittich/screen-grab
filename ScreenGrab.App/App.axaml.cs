@@ -3,6 +3,7 @@ using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Interactivity;
 using Avalonia.Markup.Xaml;
+using SkiaSharp;
 
 namespace ScreenGrab.App;
 
@@ -20,14 +21,25 @@ public partial class App : Application
 		base.OnFrameworkInitializationCompleted();
 	}
 
-	private void OnTrayClicked(object? sender, EventArgs e)
+	private void OnTrayClicked(object? sender, EventArgs e) => OpenEditor();
+
+	private void OnCapture(object? sender, EventArgs e) => OpenEditor();
+
+	// Phase 3 harness: opens the editor on a blank canvas so the annotation flow can be exercised
+	// on both OSes before real capture lands. Phase 4 replaces the blank bitmap with an
+	// IScreenCapture result fed through the selection overlay.
+	private void OpenEditor()
 	{
-		// Phase 4 wires this to a capture. Left as a no-op for the scaffold.
+		var editor = new EditorWindow(CreatePlaceholderCapture(1280, 800));
+		editor.Show();
 	}
 
-	private void OnCapture(object? sender, EventArgs e)
+	private static SKBitmap CreatePlaceholderCapture(int width, int height)
 	{
-		// Phase 4: trigger capture -> selection -> editor.
+		var bmp = new SKBitmap(new SKImageInfo(width, height, SKColorType.Bgra8888, SKAlphaType.Premul));
+		using var canvas = new SKCanvas(bmp);
+		canvas.Clear(SKColors.White);
+		return bmp;
 	}
 
 	private void OnToggleStartup(object? sender, EventArgs e)
