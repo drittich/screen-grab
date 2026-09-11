@@ -193,8 +193,39 @@ All references are to current [ScreenGrab/Form1.cs](ScreenGrab/Form1.cs) unless 
      deferred — HiDPI captures display 1:1 in DIPs, may look soft until phase 4); SkiaSharp vs
      Avalonia `TextBox` text metrics may differ by a hair (the known wrap risk) — not yet validated
      on a real capture; interactive editor UX **not yet smoke-tested** on Fedora/KDE.
-4. **Capture + selection overlay**: `IScreenCapture` (Windows GDI first, then Spectacle on
+4. ✅ **Capture + selection overlay**: `IScreenCapture` (Windows GDI first, then Spectacle on
    Linux) feeding the fullscreen selection window → crop → editor.
+   - Done 2026-09-11. Core gains the interface + crop; each platform project gains a capture impl;
+     the App gains the overlay and wires the real flow (tray Capture → grab → select → crop → editor).
+     - `ScreenGrab.Core/IScreenCapture.cs` — `SKBitmap CaptureFullScreen()` (primary/current monitor,
+       caller-owned). `ScreenGrab.Core/ImageOps.cs` — `Crop(SKBitmap, SKRectI)` (clamps to source,
+       throws if the region misses entirely), the port of `CaptureSelectedRegion`'s sub-rect draw.
+     - `ScreenGrab.Windows/GdiScreenCapture.cs` — self-contained user32/gdi32 P/Invoke: `GetDC` →
+       `BitBlt` the `SM_CXSCREEN`×`SM_CYSCREEN` primary into a 32bpp top-down DIB, `GetDIBits`, force
+       alpha to 255, `Marshal.Copy` into a BGRA8888 `SKBitmap`. Replaces `Graphics.CopyFromScreen`
+       (Form1 L267-274) with **no System.Drawing dependency**.
+     - `ScreenGrab.Linux/SpectacleScreenCapture.cs` — shells out `spectacle -b -n -m -o <tmp.png>`
+       (background, no-notify, current monitor), waits (30s ceiling), decodes via `SKBitmap.Decode`,
+       cleans up the temp file; a missing/failed Spectacle throws a clear "install spectacle" message.
+     - `ScreenGrab.App/SelectionWindow.axaml(.cs)` — the `SelectionForm` port (Form1 L1275): a
+       fullscreen borderless (`WindowDecorations=None`, `WindowState=FullScreen`, topmost) window
+       showing the capture dimmed (`Opacity 0.75`) under a hit-testable overlay `Canvas` with a red
+       rubber-band. `SelectAsync()` returns the region in **source pixels** or `null` (Esc / empty
+       drag = cancel). The backdrop `Image` is `Stretch=Fill`, so overlay DIP coords scale linearly
+       onto source pixels — DPI/Wayland-correct without positioning the window (which Wayland forbids).
+       The caller owns the full bitmap (needed for the crop); the window only disposes its display copy.
+     - `ScreenGrab.App/PlatformServices.cs` — `#if WINDOWS` factory selecting the capture impl, aligned
+       with the App's per-TFM conditional ProjectReferences.
+     - `App.axaml.cs` — tray Capture/click now run `StartCaptureAsync` (re-entrancy-guarded):
+       `Task.Run` the capture off the UI thread → `SelectionWindow` → `ImageOps.Crop` → `EditorWindow`.
+       The phase-3 blank-canvas harness (`CreatePlaceholderCapture`) is removed. Capture failure is
+       logged to stderr and aborts quietly.
+   - 3 crop unit tests added (`ImageOpsTests`, offset/clamp/miss) → 18 Core tests green. Both TFMs
+     build clean (0/0); full solution builds; Windows exe launches and stays resident in the tray.
+   - Known gaps: the **interactive** capture→select→crop→annotate path is not yet smoke-tested end to
+     end on either OS (needs a real click on the tray/capture); Spectacle's exact Plasma-6 flag support
+     (`-m` current monitor) is unverified on the target box — fall back to KWin ScreenShot2 DBus if the
+     flags differ (per Open risks). Multi-monitor uses the primary monitor only, matching today.
 5. **Tray, clipboard, save, toast, autostart** behind the interfaces for both OSes.
 6. **Hotkey/IPC**: Windows `RegisterHotKey`; Linux `--capture` flag + socket + documented KDE
    custom shortcut.

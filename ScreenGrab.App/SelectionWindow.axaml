@@ -1,0 +1,26 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="ScreenGrab.App.SelectionWindow"
+        WindowDecorations="None"
+        WindowState="FullScreen"
+        Topmost="True"
+        CanResize="False"
+        ShowInTaskbar="False"
+        Background="Black">
+
+	<!-- The captured screen, dimmed, with a rubber-band rectangle on top. The Image is stretched to
+	     fill the window so pointer positions map linearly onto the source pixels regardless of DPI;
+	     the Overlay Canvas (transparent, hit-testable) carries the rubber band. -->
+	<Grid>
+		<Image x:Name="Backdrop" Stretch="Fill" Opacity="0.75" />
+		<Canvas x:Name="Overlay" Background="#01000000">
+			<Rectangle x:Name="Band"
+			           Stroke="Red"
+			           StrokeThickness="2"
+			           Fill="#22FFFFFF"
+			           IsHitTestVisible="False"
+			           IsVisible="False" />
+		</Canvas>
+	</Grid>
+
+</Window>
