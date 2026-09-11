@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=ScreenGrab
+GenericName=Screen Capture
+Comment=Capture a screen region, annotate, and copy or save it
+Exec=screengrab
+Icon=screengrab
+Terminal=false
+Categories=Utility;Graphics;
+Keywords=screenshot;capture;screen;grab;annotate;
+StartupNotify=false

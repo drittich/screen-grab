@@ -399,3 +399,7 @@ FodyWeavers.xsd
 
 # JetBrains Rider
 *.sln.iml
+
+# ScreenGrab packaging build output
+packaging/build/
+packaging/dist/

@@ -293,10 +293,30 @@ All references are to current [ScreenGrab/Form1.cs](ScreenGrab/Form1.cs) unless 
      resident, a plain second launch and a `--capture` forward both exit 0 while the primary keeps
      running (the forward triggers a capture on it). Linux socket path/flags **not yet smoke-tested**
      on the target box. Packaging (phase 7) remains.
-7. **Package**: Windows publish (unchanged UX) + Fedora **RPM** (`dnf`-installable): self-contained
+7. ✅ **Package**: Windows publish (unchanged UX) + Fedora **RPM** (`dnf`-installable): self-contained
    `linux-x64` publish packaged as `screengrab-<ver>.x86_64.rpm` with `Requires: spectacle,
    wl-clipboard`, installing the launcher, `.desktop`, and icon system-wide. Fedora 44 only — no other
    Linux distro or package format.
+   - Done 2026-09-11. A `packaging/` directory holds everything; App gains `<Version>1.0.0</Version>`.
+     - `packaging/build-rpm.sh` — the Fedora build entry point. `dotnet publish -c Release -r linux-x64
+       -f net10.0 --self-contained` → stages payload + `.desktop` + `icon.png` into a
+       `screengrab-<ver>/` tree → tars it → `rpmbuild -bb` → copies the result to `packaging/dist/`.
+       Takes an optional version arg (default `1.0.0`); prints the `dnf install` line at the end.
+     - `packaging/screengrab.spec` — packages the *already-published* self-contained tree (no compiler
+       or network needed at rpm build time). `Requires: spectacle, wl-clipboard`; `ExclusiveArch x86_64`.
+       Lays down `%{_libdir}/screengrab/` (payload, i.e. `/usr/lib64/screengrab/`), a `/usr/bin/screengrab`
+       launcher shell-script that `exec`s the bundled host, `/usr/share/applications/screengrab.desktop`,
+       and the icon under `hicolor/256x256/apps`. `AutoReqProv: no` + disabled strip/build-id/rpath BRPs
+       so rpmbuild doesn't mangle the bundled .NET single-folder host or demand system copies of the
+       bundled native libs (libSkiaSharp/libHarfBuzzSharp). Version passed via `--define app_version`.
+     - `packaging/screengrab.desktop` — app-menu entry (`Exec=screengrab`, `Icon=screengrab`).
+     - `packaging/publish-windows.ps1` — self-contained `win-x64` publish into `packaging/dist/win-x64/`.
+     - README gains a "Building & installing" section (Fedora RPM + Windows); `.gitignore` excludes
+       `packaging/build/` and `packaging/dist/`.
+   - Verified on Windows: the self-contained `linux-x64` publish cross-builds clean and produces the
+     `screengrab` native host + bundled native libs (224 files). **Not yet run on Fedora**: `rpmbuild`
+     itself and `dnf install` of the resulting RPM need a smoke test on the target box (rpmbuild doesn't
+     exist on Windows). If Fedora's `_libdir` path or a BRP still trips, that's the place to tune.
 
 ## Verification
 

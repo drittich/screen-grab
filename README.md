@@ -44,3 +44,37 @@ instance is enforced, so a second plain `screengrab` launch just exits.
 
 Capture uses **Spectacle** and image-to-clipboard uses **wl-clipboard** (`wl-copy`); the Fedora RPM
 declares both as requirements.
+
+## Building & installing
+
+### Fedora (RPM)
+
+Build a `dnf`-installable RPM on the Fedora target box:
+
+```sh
+sudo dnf install dotnet-sdk-10.0 rpm-build   # one-time prereqs
+packaging/build-rpm.sh                        # or: packaging/build-rpm.sh 1.2.3
+```
+
+This publishes a self-contained `linux-x64` build (the .NET runtime is bundled), packages it as
+`packaging/dist/screengrab-<version>-1.*.x86_64.rpm`, and lays the app down system-wide:
+`/usr/lib64/screengrab/` (payload), `/usr/bin/screengrab` (launcher on `PATH`),
+`/usr/share/applications/screengrab.desktop`, and the hicolor icon. The RPM `Requires: spectacle,
+wl-clipboard`, so `dnf` pulls them in automatically.
+
+```sh
+sudo dnf install ./packaging/dist/screengrab-<version>-1.*.x86_64.rpm   # install
+sudo dnf upgrade ./packaging/dist/screengrab-<newver>-1.*.x86_64.rpm    # upgrade
+sudo dnf remove screengrab                                              # remove
+```
+
+After installing, launch **ScreenGrab** from the app menu (or run `screengrab`) to start the tray
+instance, then bind the hotkey as described above.
+
+### Windows
+
+```powershell
+packaging\publish-windows.ps1            # or: packaging\publish-windows.ps1 -Version 1.2.3
+```
+
+Produces a self-contained build in `packaging\dist\win-x64\`; run `screengrab.exe`.
