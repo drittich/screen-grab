@@ -141,8 +141,30 @@ All references are to current [ScreenGrab/Form1.cs](ScreenGrab/Form1.cs) unless 
    - Deviations from the plan's package list: dropped `Avalonia.Diagnostics` (no 12.1.2 release) and
      `.WithInterFont()` (needs `Avalonia.Fonts.Inter`); neither is needed for the scaffold. The old
      WinForms `ScreenGrab` project is left untouched and still in the solution until later phases retire it.
-2. **Core**: port annotation model + undo/redo (verbatim) and build the SkiaSharp compositor
+2. ✅ **Core**: port annotation model + undo/redo (verbatim) and build the SkiaSharp compositor
    (rounded rect, text, redraw-from-clean). Unit-test `ProjectAnnotations` replay.
+   - Done 2026-09-11. `Class1.cs` placeholder removed; three files added to `ScreenGrab.Core`:
+     - `Annotations.cs` — the model ported verbatim as public records: `IAnnotation`,
+       `RectAnnotation`/`TextAnnotation`, `IOperation`, `AddRectOp`/`AddTextOp`/`EditTextOp`/`DeleteTextOp`.
+       Geometry uses plain ints (was `System.Drawing` `Point`/`Rectangle`) so the model stays
+       toolkit-agnostic; record equality drives the edit/replace logic unchanged.
+     - `AnnotationHistory.cs` — the crown-jewel history/redo stacks + `ProjectAnnotations()` replay,
+       lifted verbatim from `Form1`, wrapped as a reusable class (`Add`/`Undo`/`Redo`/`Clear`,
+       `CanUndo`/`CanRedo`). Adding an op clears redo, exactly as before.
+     - `AnnotationCompositor.cs` — SkiaSharp reimplementation of the GDI+ path. `DrawRoundedRectangle`
+       → `SKCanvas.DrawRoundRect` (radius = the old GDI ellipse diameter / 2); text → `SKFont`/`DrawText`
+       with a greedy word-wrap that mirrors `TextRenderer` `WordBreak` (no mid-word splits) and the same
+       auto-size-to-content, cap-at-right-edge, +1px guard, clamp-height rules; `Render(clean, annotations,
+       exclude?)` returns a fresh composite from a clean copy — the "keep a clean original, re-project +
+       redraw" strategy, now allocation-per-render instead of mutating in place. `MeasureText` returns a
+       `TextLayout` (bounds + wrapped lines) reused by both draw and hit-testing.
+   - New xUnit project `ScreenGrab.Core.Tests` (net10.0), added to `screengrab.sln`. 15 tests, all green:
+     10 cover `ProjectAnnotations` replay + undo/redo (insertion order, edit-in-place, defensive append
+     for a missing original, delete, redo-clear-on-add, undo-reveals-original, clear), 5 smoke-test the
+     compositor (bounds anchoring, right-edge wrapping, empty text, copy-not-mutate, undo-by-re-render).
+   - Text metric parity with WinForms `TextRenderer` is not yet visually validated on a real capture
+     (the known risk); the wrap math is faithful but the +1px guard may need re-tuning in phase 3/4.
+     Save/PNG-encode via Skia stays in phase 5. Full solution builds clean (old WinForms project untouched).
 3. **Editor window** in Avalonia: render the SKBitmap, port mouse/keyboard annotation flow and
    the text-box overlay (create → drag → resize → wheel-font → commit/cancel/edit/delete).
 4. **Capture + selection overlay**: `IScreenCapture` (Windows GDI first, then Spectacle on

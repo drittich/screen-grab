@@ -15,6 +15,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ScreenGrab.Windows", "Scree
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ScreenGrab.Linux", "ScreenGrab.Linux\ScreenGrab.Linux.csproj", "{6FD6B76C-57C0-47EF-84E2-9A4404D0F894}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ScreenGrab.Core.Tests", "ScreenGrab.Core.Tests\ScreenGrab.Core.Tests.csproj", "{2E44361D-C172-49A0-8207-525AC4D36AF9}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -85,6 +87,18 @@ Global
 		{6FD6B76C-57C0-47EF-84E2-9A4404D0F894}.Release|x64.Build.0 = Release|Any CPU
 		{6FD6B76C-57C0-47EF-84E2-9A4404D0F894}.Release|x86.ActiveCfg = Release|Any CPU
 		{6FD6B76C-57C0-47EF-84E2-9A4404D0F894}.Release|x86.Build.0 = Release|Any CPU
+		{2E44361D-C172-49A0-8207-525AC4D36AF9}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{2E44361D-C172-49A0-8207-525AC4D36AF9}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{2E44361D-C172-49A0-8207-525AC4D36AF9}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{2E44361D-C172-49A0-8207-525AC4D36AF9}.Debug|x64.Build.0 = Debug|Any CPU
+		{2E44361D-C172-49A0-8207-525AC4D36AF9}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{2E44361D-C172-49A0-8207-525AC4D36AF9}.Debug|x86.Build.0 = Debug|Any CPU
+		{2E44361D-C172-49A0-8207-525AC4D36AF9}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{2E44361D-C172-49A0-8207-525AC4D36AF9}.Release|Any CPU.Build.0 = Release|Any CPU
+		{2E44361D-C172-49A0-8207-525AC4D36AF9}.Release|x64.ActiveCfg = Release|Any CPU
+		{2E44361D-C172-49A0-8207-525AC4D36AF9}.Release|x64.Build.0 = Release|Any CPU
+		{2E44361D-C172-49A0-8207-525AC4D36AF9}.Release|x86.ActiveCfg = Release|Any CPU
+		{2E44361D-C172-49A0-8207-525AC4D36AF9}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
